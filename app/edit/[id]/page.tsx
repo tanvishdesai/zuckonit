@@ -23,8 +23,9 @@ interface Post {
 }
 
 // Correct type definition for Next.js App Router page props
-interface PageProps {
+type PageProps = {
   params: { id: string }
+  searchParams?: { [key: string]: string | string[] | undefined }
 }
 
 export default function EditPostPage({ params }: PageProps) {
