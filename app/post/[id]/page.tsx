@@ -25,8 +25,13 @@ interface Post {
   user_name: string;
 }
 
-export default function PostPage({ params }: { params: Promise<{ id: string }> | { id: string } }) {
-  const unwrappedParams = React.use(params as Promise<{ id: string }>);
+// Correct type definition for Next.js App Router page props
+interface PageProps {
+  params: { id: string }
+}
+
+export default function PostPage({ params }: PageProps) {
+  const { id } = params;
   const [post, setPost] = useState<Post | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +42,7 @@ export default function PostPage({ params }: { params: Promise<{ id: string }> |
     async function fetchPost() {
       try {
         setLoading(true);
-        const postData = await getPost(unwrappedParams.id);
+        const postData = await getPost(id);
         setPost(postData as unknown as Post);
         setError(null);
       } catch (err) {
@@ -49,7 +54,7 @@ export default function PostPage({ params }: { params: Promise<{ id: string }> |
     }
 
     fetchPost();
-  }, [unwrappedParams.id]);
+  }, [id]);
 
   const handleDeletePost = async () => {
     if (!user || !post) return;
@@ -149,7 +154,7 @@ export default function PostPage({ params }: { params: Promise<{ id: string }> |
       
       {/* Comments section */}
       <div className="mt-10">
-        <Comments postId={unwrappedParams.id} />
+        <Comments postId={id} />
       </div>
     </div>
   );

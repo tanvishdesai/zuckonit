@@ -22,8 +22,13 @@ interface Post {
   user_name: string
 }
 
-export default function EditPostPage({ params }: { params: Promise<{ id: string }> | { id: string } }) {
-  const unwrappedParams = React.use(params as Promise<{ id: string }>)
+// Correct type definition for Next.js App Router page props
+interface PageProps {
+  params: { id: string }
+}
+
+export default function EditPostPage({ params }: PageProps) {
+  const { id } = params
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
   const [post, setPost] = useState<Post | null>(null)
@@ -38,7 +43,7 @@ export default function EditPostPage({ params }: { params: Promise<{ id: string 
 
     const fetchPost = async () => {
       try {
-        const postData = await getPost(unwrappedParams.id)
+        const postData = await getPost(id)
         setPost(postData as unknown as Post)
       } catch (error) {
         console.error("Error fetching post:", error)
@@ -51,7 +56,7 @@ export default function EditPostPage({ params }: { params: Promise<{ id: string 
     if (user) {
       fetchPost()
     }
-  }, [user, authLoading, router, unwrappedParams.id])
+  }, [user, authLoading, router, id])
 
   if (authLoading || loading) {
     return (
