@@ -1,0 +1,51 @@
+/* Noise texture effect */
+.noise-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.03;
+  z-index: 1;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='1'/%3E%3C/svg%3E");
+}
+
+/* Card hover effects */
+.card {
+  box-shadow: 0 0 0 0 transparent;
+  transition: all 0.3s ease;
+}
+
+.card:hover {
+  box-shadow: 0 0 15px 0 rgba(var(--primary-rgb), 0.15);
+  transform: translateY(-2px);
+}
+
+/* Soft pulse animation for interactive elements - only on hover */
+@keyframes soft-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(var(--primary-rgb), 0.2);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(var(--primary-rgb), 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(var(--primary-rgb), 0);
+  }
+}
+
+/* Not always-on, but only on hover */
+.hover\:pulse-effect:hover {
+  animation: soft-pulse 2s infinite;
+}
+
+/* Remove animation when not hovering */
+.hover\:pulse-effect {
+  animation: none;
+}
+
+/* Subtle parallax effect for containers */
+.parallax-container {
+  transition: transform 0.1s ease-out;
+} 
