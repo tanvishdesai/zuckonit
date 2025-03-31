@@ -133,7 +133,30 @@ export default function Home() {
 
   return (
     <div className="space-y-12 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <section className="py-16 -mt-8 bg-card rounded-xl bg-gradient-to-r from-[var(--gradient-start)] to-[var(--gradient-end)] shadow-lg border border-primary/20 animate-fade-in relative overflow-hidden">
+      <section 
+        className="py-16 -mt-8 bg-card rounded-xl bg-gradient-to-r from-[var(--gradient-start)] to-[var(--gradient-end)] shadow-lg border border-primary/20 animate-fade-in relative overflow-hidden"
+        style={{
+          backgroundSize: '200% 200%',
+          transition: 'background-position 0.3s ease, transform 0.3s ease'
+        }}
+        onMouseMove={(e) => {
+          const rect = e.currentTarget.getBoundingClientRect();
+          const x = (e.clientX - rect.left) / rect.width;
+          const y = (e.clientY - rect.top) / rect.height;
+          
+          // Move gradient based on mouse position
+          e.currentTarget.style.backgroundPosition = `${x * 100}% ${y * 100}%`;
+          
+          // Subtle transform effect
+          const rotateX = (0.5 - y) * 5;
+          const rotateY = (x - 0.5) * 5;
+          e.currentTarget.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.backgroundPosition = '0% 0%';
+          e.currentTarget.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg)';
+        }}
+      >
         {/* Add stronger shimmer overlay */}
         <div className="absolute inset-0 bg-shimmer-medium pointer-events-none"></div>
         
