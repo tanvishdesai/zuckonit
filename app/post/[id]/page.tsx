@@ -117,9 +117,9 @@ export default function PostPage({ params }: PageProps) {
           <div className="space-y-2">
             <div className="flex items-center space-x-4">
               <Link href="/">
-                <Button variant="outline" className="bg-blue-500 text-white hover:bg-blue-600 text-sm px-3 py-1">
-                  <span className="sr-only">Back to Posts</span>
-                  <ArrowLeft className="h-3 w-3" />
+                <Button variant="ghost" size="sm" className="text-foreground hover:bg-accent">
+                  <ArrowLeft className="h-4 w-4 mr-1" />
+                  <span>Back</span>
                 </Button>
               </Link>
               <h1 className="text-3xl font-bold">{post.title}</h1>

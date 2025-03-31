@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -8,14 +8,18 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/app/components/ThemeProvider';
-import { User, Moon, Sun } from 'lucide-react';
+import { User, Moon, Sun, Upload, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { getProfilePictureUrl, getUserProfile } from '@/lib/appwrite';
 
 export default function SettingsPage() {
-  const { user, updateName, updateEmail, updatePassword } = useAuth();
+  const { user, updateName, updateEmail, updatePassword, updateProfilePicture, getProfilePicture, updateBio } = useAuth();
   const { applyTheme } = useTheme();
   const [activeTab, setActiveTab] = useState('account');
   const [isDarkMode, setIsDarkMode] = useState(true); // Default to dark mode
+  const [profilePictureUrl, setProfilePictureUrl] = useState<string | null>(null);
+  const [uploadingPicture, setUploadingPicture] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [accountSettings, setAccountSettings] = useState({
     name: '',
@@ -37,13 +41,38 @@ export default function SettingsPage() {
   
   // Load settings
   useEffect(() => {
-    if (user) {
-      setAccountSettings({
-        name: user.name || '',
-        email: user.email || '',
-        bio: ''
-      });
-    }
+    const fetchUserInfo = async () => {
+      if (user) {
+        // Set current user name and email
+        setAccountSettings(prev => ({
+          ...prev,
+          name: user.name || '',
+          email: user.email || ''
+        }));
+        
+        // Get profile picture URL
+        const profilePicId = getProfilePicture();
+        if (profilePicId) {
+          const url = getProfilePictureUrl(profilePicId);
+          setProfilePictureUrl(url.toString());
+        }
+        
+        // Fetch user profile document to get bio
+        try {
+          const userProfile = await getUserProfile(user.$id);
+          if (userProfile && userProfile.bio !== undefined) {
+            setAccountSettings(prev => ({
+              ...prev,
+              bio: userProfile.bio || ''
+            }));
+          }
+        } catch (error) {
+          console.error('Error fetching user profile:', error);
+        }
+      }
+    };
+    
+    fetchUserInfo();
     
     // Load saved theme preferences from localStorage
     const savedColor = localStorage.getItem('primaryColor');
@@ -53,7 +82,7 @@ export default function SettingsPage() {
     if (savedColor) setPrimaryColor(savedColor);
     if (savedFontSize) setFontSize(parseInt(savedFontSize, 10));
     if (savedDarkMode) setIsDarkMode(savedDarkMode === 'true');
-  }, [user]);
+  }, [user, getProfilePicture]);
 
   const toggleDarkMode = () => {
     const newMode = !isDarkMode;
@@ -74,6 +103,9 @@ export default function SettingsPage() {
       if (user && user.name !== accountSettings.name) {
         await updateName(accountSettings.name);
       }
+      
+      // Update bio
+      await updateBio(accountSettings.bio);
       
       toast.success('Profile settings saved successfully!');
     } catch (error) {
@@ -155,6 +187,36 @@ export default function SettingsPage() {
     }
   };
 
+  const handleProfilePictureClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+  
+  const handleProfilePictureChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      try {
+        setUploadingPicture(true);
+        await updateProfilePicture(file);
+        
+        // Update UI with new profile picture
+        const profilePicId = getProfilePicture();
+        if (profilePicId) {
+          const url = getProfilePictureUrl(profilePicId);
+          setProfilePictureUrl(url.toString());
+        }
+        
+        toast.success('Profile picture updated successfully!');
+      } catch (error) {
+        console.error('Error updating profile picture:', error);
+        toast.error('Failed to update profile picture');
+      } finally {
+        setUploadingPicture(false);
+      }
+    }
+  };
+
   if (!user) {
     return (
       <div className="container max-w-6xl py-10">
@@ -196,12 +258,40 @@ export default function SettingsPage() {
             <CardContent className="space-y-4">
               <div className="flex flex-col md:flex-row gap-6 items-start">
                 <div className="flex-shrink-0">
-                  <Avatar className="h-20 w-20">
-                    <AvatarImage src="/placeholder-avatar.jpg" alt={user.name} />
+                  <Avatar className="h-20 w-20 cursor-pointer border-2 hover:border-primary transition-all relative" onClick={handleProfilePictureClick}>
+                    {uploadingPicture && (
+                      <div className="absolute inset-0 bg-background/80 flex items-center justify-center z-10 rounded-full">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                      </div>
+                    )}
+                    <AvatarImage src={profilePictureUrl || "/placeholder-avatar.jpg"} alt={user.name} />
                     <AvatarFallback className="text-lg">{user.name.charAt(0).toUpperCase()}</AvatarFallback>
                   </Avatar>
-                  <Button variant="outline" size="sm" className="mt-2 w-full">
-                    Change Avatar
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    ref={fileInputRef}
+                    onChange={handleProfilePictureChange}
+                  />
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="mt-2 w-full"
+                    onClick={handleProfilePictureClick}
+                    disabled={uploadingPicture}
+                  >
+                    {uploadingPicture ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                        Uploading...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="h-4 w-4 mr-1" />
+                        Change Avatar
+                      </>
+                    )}
                   </Button>
                 </div>
                 

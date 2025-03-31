@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { getCurrentUser, login, logout, createUserAccount, updateUserName, updateUserEmail, updateUserPassword } from '@/lib/appwrite';
+import { getCurrentUser, login, logout, createUserAccount, updateUserName, updateUserEmail, updateUserPassword, uploadProfilePicture, updateUserPrefs, updateUserBio } from '@/lib/appwrite';
 import { Models } from 'appwrite';
 
 interface AuthContextProps {
@@ -13,6 +13,9 @@ interface AuthContextProps {
   updateName: (name: string) => Promise<void>;
   updateEmail: (email: string, password: string) => Promise<void>;
   updatePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  updateProfilePicture: (file: File) => Promise<void>;
+  getProfilePicture: () => string | null;
+  updateBio: (bio: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextProps | undefined>(undefined);
@@ -118,6 +121,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const updateProfilePicture = async (file: File) => {
+    if (!user) throw new Error('Not logged in');
+    
+    try {
+      // Upload the image
+      const { id } = await uploadProfilePicture(file);
+      
+      // Update user preferences with the new profile picture ID
+      await updateUserPrefs({
+        ...user.prefs,
+        profilePictureId: id
+      });
+      
+      // Get the updated user
+      const updatedUser = await getCurrentUser();
+      setUser(updatedUser);
+    } catch (error) {
+      console.error('Failed to update profile picture:', error);
+      throw error;
+    }
+  };
+
+  const getProfilePicture = () => {
+    if (!user || !user.prefs) return null;
+    return user.prefs.profilePictureId || null;
+  };
+
+  const updateBioHandler = async (bio: string) => {
+    try {
+      setLoading(true);
+      await updateUserBio(bio);
+    } catch (error) {
+      console.error('Update bio error:', error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -129,6 +171,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         updateName: updateUserNameHandler,
         updateEmail: updateUserEmailHandler,
         updatePassword: updateUserPasswordHandler,
+        updateProfilePicture,
+        getProfilePicture,
+        updateBio: updateBioHandler
       }}
     >
       {children}

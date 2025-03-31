@@ -7,6 +7,8 @@ const APPWRITE_DATABASE_ID = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID || 'zu
 const APPWRITE_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_COLLECTION_ID || 'posts';
 const APPWRITE_BUCKET_ID = process.env.NEXT_PUBLIC_APPWRITE_BUCKET_ID || 'post_images';
 const APPWRITE_COMMENTS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_COMMENTS_COLLECTION_ID || 'comments';
+const APPWRITE_PROFILE_PICTURES_BUCKET_ID = process.env.NEXT_PUBLIC_APPWRITE_PROFILE_PICTURES_BUCKET_ID || 'profile_pictures';
+const APPWRITE_USERS_ID = process.env.NEXT_PUBLIC_APPWRITE_USERS_ID || 'users';
 
 // Initialize Appwrite Client
 const client = new Client()
@@ -26,18 +28,43 @@ export const DATABASES = {
 export const COLLECTIONS = {
     POSTS: APPWRITE_COLLECTION_ID,
     COMMENTS: APPWRITE_COMMENTS_COLLECTION_ID,
-    USERS: 'users' // New collection for users
+    USERS: APPWRITE_USERS_ID // New collection for users
 };
 
 export const BUCKETS = {
-    IMAGES: APPWRITE_BUCKET_ID
+    IMAGES: APPWRITE_BUCKET_ID,
+    PROFILE_PICTURES: APPWRITE_PROFILE_PICTURES_BUCKET_ID
 };
+
+// Interface for author/user objects
+interface AuthorData {
+    userId: string;
+    name: string;
+    postCount: number;
+    profilePictureId?: string;
+}
 
 // Helper functions for authentication
 export const createUserAccount = async (email: string, password: string, name: string) => {
     try {
         const userId = ID.unique();
         const newAccount = await account.create(userId, email, password, name);
+        
+        // Create user record in users collection
+        await databases.createDocument(
+            DATABASES.MAIN,
+            COLLECTIONS.USERS,
+            userId, // Use same ID as the auth account for easy reference
+            {
+                userId: userId,
+                name: name,
+                email: email,
+                profilePictureId: null,
+                bio: "", // Initialize empty bio field
+                created_at: new Date().toISOString()
+            }
+        );
+        
         if (newAccount) {
             return await login(email, password);
         }
@@ -78,7 +105,21 @@ export const getCurrentUser = async () => {
 // User profile update functions
 export const updateUserName = async (name: string) => {
     try {
-        return await account.updateName(name);
+        // Update name in Appwrite Auth
+        const result = await account.updateName(name);
+        
+        // Also update in users collection
+        const currentUser = await account.get();
+        await databases.updateDocument(
+            DATABASES.MAIN,
+            COLLECTIONS.USERS,
+            currentUser.$id,
+            {
+                name: name
+            }
+        );
+        
+        return result;
     } catch (error) {
         console.error("Error updating name:", error);
         throw error;
@@ -87,7 +128,21 @@ export const updateUserName = async (name: string) => {
 
 export const updateUserEmail = async (email: string, password: string) => {
     try {
-        return await account.updateEmail(email, password);
+        // Update email in Appwrite Auth
+        const result = await account.updateEmail(email, password);
+        
+        // Also update in users collection
+        const currentUser = await account.get();
+        await databases.updateDocument(
+            DATABASES.MAIN,
+            COLLECTIONS.USERS,
+            currentUser.$id,
+            {
+                email: email
+            }
+        );
+        
+        return result;
     } catch (error) {
         console.error("Error updating email:", error);
         throw error;
@@ -99,6 +154,67 @@ export const updateUserPassword = async (password: string, newPassword: string) 
         return await account.updatePassword(password, newPassword);
     } catch (error) {
         console.error("Error updating password:", error);
+        throw error;
+    }
+};
+
+// Upload profile picture
+export const uploadProfilePicture = async (file: File) => {
+    try {
+        const currentUser = await getCurrentUser();
+        if (!currentUser) {
+            throw new Error('User not authenticated');
+        }
+        
+        // Upload image to storage
+        const upload = await storage.createFile(
+            BUCKETS.PROFILE_PICTURES,
+            ID.unique(),
+            file
+        );
+        
+        // Update user preferences (for current session user)
+        await updateUserPrefs({
+            ...currentUser.prefs,
+            profilePictureId: upload.$id
+        });
+        
+        // Also update the users collection document
+        await databases.updateDocument(
+            DATABASES.MAIN,
+            COLLECTIONS.USERS,
+            currentUser.$id,
+            {
+                profilePictureId: upload.$id
+            }
+        );
+        
+        const fileUrl = await storage.getFileView(
+            BUCKETS.PROFILE_PICTURES,
+            upload.$id
+        );
+        
+        return {
+            id: upload.$id,
+            url: fileUrl
+        };
+    } catch (error) {
+        console.error("Error uploading profile picture:", error);
+        throw error;
+    }
+};
+
+// Get profile picture URL
+export const getProfilePictureUrl = (imageId: string) => {
+    return storage.getFileView(BUCKETS.PROFILE_PICTURES, imageId);
+};
+
+// Update user preferences with profile picture
+export const updateUserPrefs = async (prefs: Record<string, unknown>) => {
+    try {
+        return await account.updatePrefs(prefs);
+    } catch (error) {
+        console.error("Error updating preferences:", error);
         throw error;
     }
 };
@@ -367,7 +483,7 @@ export const getPopularAuthors = async (limit = 4) => {
         );
 
         // Count posts per author and sort by count, handling potential null values
-        const authorStats = posts.documents.reduce((acc: { [key: string]: { userId: string, name: string, postCount: number } }, post) => {
+        const authorStats = posts.documents.reduce((acc: { [key: string]: AuthorData }, post) => {
             // Skip posts with missing user data
             if (!post.user_id || !post.user_name) return acc;
             
@@ -384,8 +500,27 @@ export const getPopularAuthors = async (limit = 4) => {
 
         // Convert to array and sort by post count
         const sortedAuthors = Object.values(authorStats)
-            .sort((a: { postCount: number }, b: { postCount: number }) => b.postCount - a.postCount)
+            .sort((a: AuthorData, b: AuthorData) => b.postCount - a.postCount)
             .slice(0, limit);
+
+        // Fetch profile pictures for these authors from users collection
+        for (const author of sortedAuthors) {
+            try {
+                // Try to get user document from the users collection
+                const userDoc = await getUserProfile(author.userId);
+                if (userDoc && userDoc.profilePictureId) {
+                    author.profilePictureId = userDoc.profilePictureId;
+                } else {
+                    // Fallback to current user's prefs if the user is the current user
+                    const currentUser = await account.get();
+                    if (currentUser.$id === author.userId && currentUser.prefs?.profilePictureId) {
+                        author.profilePictureId = currentUser.prefs.profilePictureId;
+                    }
+                }
+            } catch  {
+                // Ignore errors - we just won't have profile picture
+            }
+        }
 
         return sortedAuthors;
     } catch (error) {
@@ -397,7 +532,32 @@ export const getPopularAuthors = async (limit = 4) => {
 // Function to search for users by name
 export const searchUsers = async (searchTerm: string, limit = 10) => {
     try {
-        // Get all posts to extract unique users
+        /* 
+        // First try to search directly in the users collection using fulltext index
+        // This requires a fulltext index on the 'name' field in your Appwrite database
+        // If you're seeing errors, you need to create this index in the Appwrite console
+        // or rely only on the fallback method below
+        const usersResult = await databases.listDocuments(
+            DATABASES.MAIN,
+            COLLECTIONS.USERS,
+            [
+                Query.limit(limit),
+                Query.search('name', searchTerm)
+            ]
+        );
+        
+        if (usersResult.documents.length > 0) {
+            // Map response to expected format
+            return usersResult.documents.map(doc => ({
+                userId: doc.userId,
+                name: doc.name,
+                postCount: 0, // We'll need to fetch post count separately
+                profilePictureId: doc.profilePictureId
+            }));
+        }
+        */
+        
+        // Fallback to searching in posts
         const posts = await databases.listDocuments(
             DATABASES.MAIN,
             COLLECTIONS.POSTS,
@@ -405,7 +565,7 @@ export const searchUsers = async (searchTerm: string, limit = 10) => {
         );
 
         // Extract unique users from posts
-        const usersMap = posts.documents.reduce((acc: { [key: string]: { userId: string, name: string, postCount: number } }, post) => {
+        const usersMap = posts.documents.reduce((acc: { [key: string]: AuthorData }, post) => {
             // Skip posts with missing user data
             if (!post.user_id || !post.user_name) return acc;
             
@@ -423,11 +583,24 @@ export const searchUsers = async (searchTerm: string, limit = 10) => {
         // Filter users whose names match the search term
         const searchTermLower = searchTerm.toLowerCase();
         const matchingUsers = Object.values(usersMap)
-            .filter((user: { name: string }) => 
+            .filter((user: AuthorData) => 
                 user.name.toLowerCase().includes(searchTermLower)
             )
-            .sort((a: { postCount: number }, b: { postCount: number }) => b.postCount - a.postCount)
+            .sort((a: AuthorData, b: AuthorData) => b.postCount - a.postCount)
             .slice(0, limit);
+
+        // Fetch profile pictures for these users from users collection
+        for (const user of matchingUsers) {
+            try {
+                // Try to get user document from the users collection
+                const userDoc = await getUserProfile(user.userId);
+                if (userDoc && userDoc.profilePictureId) {
+                    user.profilePictureId = userDoc.profilePictureId;
+                }
+            } catch  {
+                // Ignore errors - we just won't have profile picture
+            }
+        }
 
         return matchingUsers;
     } catch (error) {
@@ -439,6 +612,20 @@ export const searchUsers = async (searchTerm: string, limit = 10) => {
 // Function to get user by ID
 export const getUserById = async (userId: string) => {
     try {
+        // First try to get user from users collection
+        const userProfile = await getUserProfile(userId);
+        
+        // Try to get the user account data for preferences (will only work for current user)
+        let userData = null;
+        try {
+            const currentUser = await account.get();
+            if (currentUser.$id === userId) {
+                userData = currentUser;
+            }
+        } catch  {
+            // Silently fail if we can't get the user account (normal for other users)
+        }
+        
         // Get user's posts to calculate post count
         const posts = await databases.listDocuments(
             DATABASES.MAIN,
@@ -446,21 +633,87 @@ export const getUserById = async (userId: string) => {
             [Query.equal('user_id', userId)]
         );
         
-        // If user has at least one post, we can get their data
+        // If user profile exists, use that data
+        if (userProfile) {
+            return {
+                userId: userId,
+                name: userProfile.name || 'Anonymous User',
+                postCount: posts.documents.length,
+                posts: posts.documents,
+                profilePictureId: userProfile.profilePictureId || userData?.prefs?.profilePictureId || null,
+                bio: userProfile.bio || null
+            };
+        }
+        
+        // If user has at least one post but no profile, construct from post data
         if (posts.documents.length > 0) {
             const firstPost = posts.documents[0];
             return {
                 userId: userId,
                 name: firstPost.user_name || 'Anonymous User',
                 postCount: posts.documents.length,
-                posts: posts.documents
+                posts: posts.documents,
+                profilePictureId: userData?.prefs?.profilePictureId || null,
+                bio: null
             };
         }
         
-        // If no posts found, return null
+        // If no posts found but we have user data, use that
+        if (userData) {
+            return {
+                userId: userId,
+                name: userData.name || 'Anonymous User',
+                postCount: 0,
+                posts: [],
+                profilePictureId: userData?.prefs?.profilePictureId || null
+            }
+        }
+        
+        // If no user data found at all, return null
         return null;
     } catch (error) {
         console.error("Error fetching user by ID:", error);
+        throw error;
+    }
+};
+
+// Function to get user profile data by user ID
+export const getUserProfile = async (userId: string) => {
+    try {
+        // Try to get the user document from the users collection
+        const userDoc = await databases.getDocument(
+            DATABASES.MAIN,
+            COLLECTIONS.USERS,
+            userId
+        );
+        
+        return userDoc;
+    } catch (error) {
+        // If document not found, return null
+        console.error("Error fetching user profile:", error);
+        return null;
+    }
+};
+
+// Update user bio
+export const updateUserBio = async (bio: string) => {
+    try {
+        // Get current user
+        const currentUser = await account.get();
+        
+        // Update bio in users collection
+        await databases.updateDocument(
+            DATABASES.MAIN,
+            COLLECTIONS.USERS,
+            currentUser.$id,
+            {
+                bio: bio
+            }
+        );
+        
+        return true;
+    } catch (error) {
+        console.error("Error updating bio:", error);
         throw error;
     }
 }; 

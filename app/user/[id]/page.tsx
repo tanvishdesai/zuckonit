@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { getUserById } from '@/lib/appwrite';
+import { getUserById, getProfilePictureUrl } from '@/lib/appwrite';
 import { PostCard } from '@/components/ui/PostCard';
 import { Card, CardContent } from '@/components/ui/card';
 import { MessageSquare, Calendar, User } from 'lucide-react';
 import { format } from 'date-fns';
+import Image from 'next/image';
 
 // Define Post type for posts in user profile
 interface Post {
@@ -25,6 +26,8 @@ interface UserProfile {
   name: string;
   postCount: number;
   posts: Post[];
+  profilePictureId?: string | null;
+  bio?: string | null;
 }
 
 export default function UserProfilePage() {
@@ -93,6 +96,8 @@ export default function UserProfilePage() {
   const memberSince = user.posts.length > 0 
     ? format(new Date(user.posts[user.posts.length - 1].created_at), 'MMMM yyyy')
     : 'Unknown';
+    
+  const profilePictureUrl = user.profilePictureId ? getProfilePictureUrl(user.profilePictureId).toString() : null;
 
   return (
     <div className="container max-w-6xl py-10 animate-fade-in">
@@ -100,10 +105,21 @@ export default function UserProfilePage() {
         {/* User Profile Header */}
         <Card className="overflow-hidden border-2 mb-10">
           <div className="bg-gradient-to-r from-primary/20 to-primary/5 h-40 relative">
-            <div className="absolute -bottom-16 left-8 h-32 w-32 rounded-full border-4 border-background bg-gradient-to-br from-primary to-primary/40 flex items-center justify-center">
-              <span className="text-4xl font-bold text-primary-foreground">
-                {user.name ? user.name.charAt(0).toUpperCase() : 'A'}
-              </span>
+            <div className="absolute -bottom-16 left-8 h-32 w-32 rounded-full border-4 border-background overflow-hidden">
+              {profilePictureUrl ? (
+                <Image 
+                  src={profilePictureUrl}
+                  alt={user.name}
+                  fill
+                  className="object-cover"
+                />
+              ) : (
+                <div className="w-full h-full bg-gradient-to-br from-primary to-primary/40 flex items-center justify-center">
+                  <span className="text-4xl font-bold text-primary-foreground">
+                    {user.name ? user.name.charAt(0).toUpperCase() : 'A'}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
           <CardContent className="pt-20 pb-6 px-8">
@@ -118,6 +134,12 @@ export default function UserProfilePage() {
                 <span>Member since {memberSince}</span>
               </div>
             </div>
+            
+            {user.bio && (
+              <div className="mt-4 text-sm leading-relaxed">
+                <p>{user.bio}</p>
+              </div>
+            )}
           </CardContent>
         </Card>
 

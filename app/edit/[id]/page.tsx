@@ -116,10 +116,10 @@ export default function EditPostPage({ params }: PageProps) {
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6">
       <div className="mb-8">
-        <Button variant="ghost" size="sm" className="mb-4" asChild>
+        <Button variant="ghost" size="sm" className="text-foreground hover:bg-accent mb-4" asChild>
           <Link href="/">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Home
+            <ArrowLeft className="h-4 w-4 mr-1" />
+            <span>Back</span>
           </Link>
         </Button>
         <h1 className="text-3xl font-bold">Edit Post</h1>

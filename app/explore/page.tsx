@@ -6,10 +6,11 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { PostCard } from '@/components/ui/PostCard';
 import { UserCard } from '@/components/ui/UserCard';
-import { getPosts, getPopularAuthors, searchUsers } from '@/lib/appwrite';
+import { getPosts, getPopularAuthors, searchUsers, getProfilePictureUrl } from '@/lib/appwrite';
 import { Search, User, MessageSquare, ArrowRight, Users, FileText } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Link from 'next/link';
+import Image from 'next/image';
 
 // Define interfaces for posts and users
 interface Post {
@@ -26,6 +27,7 @@ interface Author {
   userId: string;
   name: string;
   postCount: number;
+  profilePictureId?: string;
 }
 
 export default function ExplorePage() {
@@ -167,6 +169,7 @@ export default function ExplorePage() {
                         userId={user.userId}
                         name={user.name}
                         postCount={user.postCount}
+                        profilePictureId={user.profilePictureId}
                       />
                     ))}
                   </div>
@@ -205,6 +208,7 @@ export default function ExplorePage() {
                       userId={user.userId}
                       name={user.name}
                       postCount={user.postCount}
+                      profilePictureId={user.profilePictureId}
                     />
                   ))}
                 </div>
@@ -265,11 +269,23 @@ export default function ExplorePage() {
                       className="group flex flex-col items-center p-3 rounded-lg border transition-all 
                         hover:border-primary hover:bg-primary/5 cursor-pointer"
                     >
-                      <div className="h-16 w-16 rounded-full bg-gradient-to-br from-primary to-primary/40 
-                        flex items-center justify-center text-primary-foreground text-xl font-bold mb-2
-                        transition-transform group-hover:scale-110 group-hover:shadow-lg">
-                        {author?.name ? author.name.charAt(0) : 'A'}
-                      </div>
+                      {author.profilePictureId ? (
+                        <div className="h-16 w-16 rounded-full overflow-hidden relative
+                          transition-transform group-hover:scale-110 group-hover:shadow-lg">
+                          <Image 
+                            src={getProfilePictureUrl(author.profilePictureId).toString()}
+                            alt={author.name}
+                            fill
+                            className="object-cover"
+                          />
+                        </div>
+                      ) : (
+                        <div className="h-16 w-16 rounded-full bg-gradient-to-br from-primary to-primary/40 
+                          flex items-center justify-center text-primary-foreground text-xl font-bold mb-2
+                          transition-transform group-hover:scale-110 group-hover:shadow-lg">
+                          {author?.name ? author.name.charAt(0) : 'A'}
+                        </div>
+                      )}
                       <p className="text-sm font-medium text-center group-hover:text-primary">
                         {author?.name || 'Anonymous User'}
                       </p>

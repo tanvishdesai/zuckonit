@@ -35,11 +35,11 @@ export default function RootLayout({
               <div className="noise-overlay" />
               
               <Navbar />
-              <main className="flex-1 container py-8 relative z-10">
+              <main className="flex-1 container mx-auto py-8 relative z-10">
                 {children}
               </main>
               <footer className="border-t py-10 bg-muted/30 relative z-10">
-                <div className="container">
+                <div className="container mx-auto">
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
                     <div className="space-y-3">
                       <h3 className="font-bold text-lg bg-gradient-to-r from-[var(--gradient-start)] to-[var(--gradient-end)] text-transparent bg-clip-text">Zuckonit</h3>

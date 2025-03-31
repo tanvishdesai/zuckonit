@@ -13,10 +13,13 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { PlusCircle, LogOut, User, Home, Menu, X, Settings, Compass, Info } from 'lucide-react';
 import { useState } from 'react';
+import { getProfilePictureUrl } from '@/lib/appwrite';
 
 export function Navbar() {
-  const { user, logout } = useAuth();
+  const { user, logout, getProfilePicture } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const profilePictureId = user ? getProfilePicture() : null;
+  const profilePictureUrl = profilePictureId ? getProfilePictureUrl(profilePictureId).toString() : null;
 
   const handleLogout = async () => {
     try {
@@ -29,7 +32,7 @@ export function Navbar() {
 
   return (
     <nav className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-16 items-center justify-between">
+      <div className="container mx-auto flex h-16 items-center justify-between">
         <div className="flex items-center gap-2">
           <Link href="/" className="flex items-center space-x-2">
             <span className="font-bold text-2xl text-primary">Zuckonit</span>
@@ -77,7 +80,7 @@ export function Navbar() {
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="relative h-9 w-9 rounded-full">
                     <Avatar className="h-9 w-9 border">
-                      <AvatarImage src="/placeholder-avatar.jpg" alt={user.name} />
+                      <AvatarImage src={profilePictureUrl || "/placeholder-avatar.jpg"} alt={user.name} />
                       <AvatarFallback className="bg-primary/10 text-primary">{user.name.charAt(0).toUpperCase()}</AvatarFallback>
                     </Avatar>
                   </Button>
@@ -165,7 +168,7 @@ export function Navbar() {
                 <div className="space-y-3">
                   <div className="flex items-center gap-2 p-2">
                     <Avatar className="h-8 w-8">
-                      <AvatarImage src="/placeholder-avatar.jpg" alt={user.name} />
+                      <AvatarImage src={profilePictureUrl || "/placeholder-avatar.jpg"} alt={user.name} />
                       <AvatarFallback>{user.name.charAt(0).toUpperCase()}</AvatarFallback>
                     </Avatar>
                     <div>
@@ -173,6 +176,15 @@ export function Navbar() {
                       <p className="text-xs text-muted-foreground">{user.email}</p>
                     </div>
                   </div>
+                  
+                  <Link 
+                    href="/profile" 
+                    className="flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-accent rounded"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    <User className="h-4 w-4" />
+                    Profile
+                  </Link>
                   
                   <Link 
                     href="/create" 
