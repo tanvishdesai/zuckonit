@@ -123,7 +123,7 @@ export default function ThemeProvider({
     return () => {
       window.removeEventListener('storage', applyTheme);
     };
-  }, []);
+  }, [applyTheme]);
   
   return (
     <ThemeContext.Provider value={{ applyTheme }}>

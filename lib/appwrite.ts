@@ -9,6 +9,8 @@ const APPWRITE_BUCKET_ID = process.env.NEXT_PUBLIC_APPWRITE_BUCKET_ID || 'post_i
 const APPWRITE_COMMENTS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_COMMENTS_COLLECTION_ID || 'comments';
 const APPWRITE_PROFILE_PICTURES_BUCKET_ID = process.env.NEXT_PUBLIC_APPWRITE_PROFILE_PICTURES_BUCKET_ID || 'profile_pictures';
 const APPWRITE_USERS_ID = process.env.NEXT_PUBLIC_APPWRITE_USERS_ID || 'users';
+const APPWRITE_GROUPS_ID = process.env.NEXT_PUBLIC_APPWRITE_GROUPS_ID || 'groups';
+const APPWRITE_GROUP_MEMBERS_ID = process.env.NEXT_PUBLIC_APPWRITE_GROUP_MEMBERS_ID || 'group_members';
 
 // Initialize Appwrite Client
 const client = new Client()
@@ -28,7 +30,9 @@ export const DATABASES = {
 export const COLLECTIONS = {
     POSTS: APPWRITE_COLLECTION_ID,
     COMMENTS: APPWRITE_COMMENTS_COLLECTION_ID,
-    USERS: APPWRITE_USERS_ID // New collection for users
+    USERS: APPWRITE_USERS_ID, // New collection for users
+    GROUPS: APPWRITE_GROUPS_ID, // Collection for user groups
+    GROUP_MEMBERS: APPWRITE_GROUP_MEMBERS_ID // Collection for group members
 };
 
 export const BUCKETS = {
@@ -43,6 +47,27 @@ interface AuthorData {
     postCount: number;
     profilePictureId?: string;
 }
+
+// Interface for user groups
+export interface Group {
+    id: string; // Assuming id should be a string, adjust if necessary
+    $id: string;
+    name: string;
+    description?: string;
+    creator_id: string;
+    created_at: string;
+}
+
+// Interface for group members
+export interface GroupMember {
+    $id: string;
+    group_id: string;
+    user_id: string;
+    added_at: string;
+}
+
+// Interface for post visibility
+export type PostVisibility = 'public' | 'private' | 'groups';
 
 // Helper functions for authentication
 export const createUserAccount = async (email: string, password: string, name: string) => {
@@ -220,25 +245,40 @@ export const updateUserPrefs = async (prefs: Record<string, unknown>) => {
 };
 
 // Helper functions for posts
-export const createPost = async (title: string, content: string, imageId?: string) => {
+export const createPost = async (
+    title: string, 
+    content: string, 
+    visibility: PostVisibility = 'public', 
+    groupIds: string[] = [], 
+    imageId?: string
+) => {
     try {
         const currentUser = await getCurrentUser();
         if (!currentUser) {
             throw new Error('User not authenticated');
         }
 
+        // Create post data object
+        const postData: Record<string, unknown> = {
+            title,
+            content,
+            image: imageId || null,
+            created_at: new Date().toISOString(),
+            user_id: currentUser.$id,
+            user_name: currentUser.name,
+            visibility: visibility
+        };
+        
+        // Only include group_id field if visibility is set to 'groups'
+        if (visibility === 'groups') {
+            postData.group_id = groupIds;
+        }
+
         const post = await databases.createDocument(
             DATABASES.MAIN,
             COLLECTIONS.POSTS,
             ID.unique(),
-            {
-                title,
-                content,
-                image: imageId || null,
-                created_at: new Date().toISOString(),
-                user_id: currentUser.$id,
-                user_name: currentUser.name
-            }
+            postData
         );
         return post;
     } catch (error) {
@@ -308,13 +348,35 @@ export const getPost = async (id: string) => {
     }
 };
 
-export const updatePost = async (id: string, data: Partial<{ title: string, content: string, image: string }>) => {
+export const updatePost = async (
+    id: string, 
+    data: Partial<{ 
+        title: string, 
+        content: string, 
+        image: string, 
+        visibility: PostVisibility,
+        group_id: string[]
+    }>
+) => {
     try {
+        // Create update data object
+        const updateData: Record<string, unknown> = { ...data };
+        
+        // If visibility is changing and not set to 'groups', remove group_id field
+        if (updateData.visibility && updateData.visibility !== 'groups') {
+            delete updateData.group_id;
+        }
+        
+        // If visibility is set to 'groups' but group_id is empty or not provided, set to empty array
+        if (updateData.visibility === 'groups' && !updateData.group_id) {
+            updateData.group_id = [];
+        }
+        
         return await databases.updateDocument(
             DATABASES.MAIN,
             COLLECTIONS.POSTS,
             id,
-            data
+            updateData
         );
     } catch (error) {
         console.error("Error updating post:", error);
@@ -610,69 +672,50 @@ export const searchUsers = async (searchTerm: string, limit = 10) => {
 };
 
 // Function to get user by ID
-export const getUserById = async (userId: string) => {
+export const getUserById = async (userId: string): Promise<Record<string, unknown> | null> => {
     try {
         // First try to get user from users collection
-        const userProfile = await getUserProfile(userId);
-        
-        // Try to get the user account data for preferences (will only work for current user)
-        let userData = null;
         try {
-            const currentUser = await account.get();
-            if (currentUser.$id === userId) {
-                userData = currentUser;
-            }
-        } catch  {
-            // Silently fail if we can't get the user account (normal for other users)
-        }
-        
-        // Get user's posts to calculate post count
-        const posts = await databases.listDocuments(
-            DATABASES.MAIN,
-            COLLECTIONS.POSTS,
-            [Query.equal('user_id', userId)]
-        );
-        
-        // If user profile exists, use that data
-        if (userProfile) {
+            const user = await databases.getDocument(
+                DATABASES.MAIN,
+                COLLECTIONS.USERS,
+                userId
+            );
+            
             return {
-                userId: userId,
-                name: userProfile.name || 'Anonymous User',
-                postCount: posts.documents.length,
-                posts: posts.documents,
-                profilePictureId: userProfile.profilePictureId || userData?.prefs?.profilePictureId || null,
-                bio: userProfile.bio || null
+                userId: user.$id,
+                name: user.name,
+                email: user.email,
+                profilePictureId: user.profile_picture,
+                bio: user.bio,
+                created_at: user.created_at,
+                postCount: user.post_count || 0,
             };
-        }
-        
-        // If user has at least one post but no profile, construct from post data
-        if (posts.documents.length > 0) {
-            const firstPost = posts.documents[0];
-            return {
-                userId: userId,
-                name: firstPost.user_name || 'Anonymous User',
-                postCount: posts.documents.length,
-                posts: posts.documents,
-                profilePictureId: userData?.prefs?.profilePictureId || null,
-                bio: null
-            };
-        }
-        
-        // If no posts found but we have user data, use that
-        if (userData) {
-            return {
-                userId: userId,
-                name: userData.name || 'Anonymous User',
-                postCount: 0,
-                posts: [],
-                profilePictureId: userData?.prefs?.profilePictureId || null
+        } catch {
+            // If not found in users collection, try to get from Appwrite accounts
+            try {
+                const user = await account.get();
+                
+                if (user.$id === userId) {
+                    return {
+                        userId: user.$id,
+                        name: user.name,
+                        email: user.email,
+                        profilePictureId: null,
+                        bio: null,
+                        created_at: null,
+                        postCount: 0,
+                    };
+                }
+            } catch {
+                // Not found in Appwrite accounts either
+                return null;
             }
         }
         
-        // If no user data found at all, return null
         return null;
     } catch (error) {
-        console.error("Error fetching user by ID:", error);
+        console.error("Error fetching user:", error);
         throw error;
     }
 };
@@ -715,5 +758,445 @@ export const updateUserBio = async (bio: string) => {
     } catch (error) {
         console.error("Error updating bio:", error);
         throw error;
+    }
+};
+
+// Group management functions
+
+/**
+ * Create a new group
+ * @param name Group name
+ * @param description Optional group description
+ * @returns Created group document
+ */
+export const createGroup = async (name: string, description: string = '') => {
+    try {
+        const currentUser = await getCurrentUser();
+        if (!currentUser) {
+            throw new Error('User not authenticated');
+        }
+
+        const group = await databases.createDocument(
+            DATABASES.MAIN,
+            COLLECTIONS.GROUPS,
+            ID.unique(),
+            {
+                name,
+                description,
+                creator_id: currentUser.$id,
+                created_at: new Date().toISOString()
+            }
+        );
+        return group;
+    } catch (error) {
+        console.error("Error creating group:", error);
+        throw error;
+    }
+};
+
+/**
+ * Get all groups created by the current user
+ * @returns Array of groups created by the current user
+ */
+export const getUserGroups = async () => {
+    try {
+        const currentUser = await getCurrentUser();
+        if (!currentUser) {
+            throw new Error('User not authenticated');
+        }
+
+        const groups = await databases.listDocuments(
+            DATABASES.MAIN,
+            COLLECTIONS.GROUPS,
+            [Query.equal('creator_id', currentUser.$id)]
+        );
+        return groups.documents.map(doc => ({
+            $id: doc.$id,
+            name: doc.name,
+            description: doc.description,
+            creator_id: doc.creator_id,
+            created_at: doc.created_at
+        })) as Group[];
+    } catch (error) {
+        console.error("Error fetching user groups:", error);
+        throw error;
+    }
+};
+
+/**
+ * Get a specific group by ID
+ * @param groupId Group ID to fetch
+ * @returns Group document
+ */
+export const getGroup = async (groupId: string) => {
+    try {
+        const doc = await databases.getDocument(
+            DATABASES.MAIN,
+            COLLECTIONS.GROUPS,
+            groupId
+        );
+        return {
+            $id: doc.$id,
+            name: doc.name,
+            description: doc.description,
+            creator_id: doc.creator_id,
+            created_at: doc.created_at
+        } as Group;
+    } catch (error) {
+        console.error("Error fetching group:", error);
+        throw error;
+    }
+};
+
+/**
+ * Update a group
+ * @param groupId Group ID to update
+ * @param data New group data
+ * @returns Updated group document
+ */
+export const updateGroup = async (
+    groupId: string, 
+    data: Partial<{ name: string, description: string }>
+) => {
+    try {
+        const doc = await databases.updateDocument(
+            DATABASES.MAIN,
+            COLLECTIONS.GROUPS,
+            groupId,
+            data
+        );
+        return {
+            $id: doc.$id,
+            name: doc.name,
+            description: doc.description,
+            creator_id: doc.creator_id,
+            created_at: doc.created_at
+        } as Group;
+    } catch (error) {
+        console.error("Error updating group:", error);
+        throw error;
+    }
+};
+
+/**
+ * Delete a group
+ * @param groupId Group ID to delete
+ * @returns Response from delete operation
+ */
+export const deleteGroup = async (groupId: string) => {
+    try {
+        // First delete all group members
+        const members = await getGroupMembers(groupId);
+        for (const member of members) {
+            await removeUserFromGroup(groupId, member.user_id);
+        }
+        
+        // Then delete the group
+        return await databases.deleteDocument(
+            DATABASES.MAIN,
+            COLLECTIONS.GROUPS,
+            groupId
+        );
+    } catch (error) {
+        console.error("Error deleting group:", error);
+        throw error;
+    }
+};
+
+/**
+ * Add a user to a group
+ * @param groupId Group ID to add user to
+ * @param userId User ID to add to group
+ * @returns Created group member document
+ */
+export const addUserToGroup = async (groupId: string, userId: string) => {
+    try {
+        // Check if user is already in the group
+        const existingMember = await databases.listDocuments(
+            DATABASES.MAIN,
+            COLLECTIONS.GROUP_MEMBERS,
+            [
+                Query.equal('group_id', groupId),
+                Query.equal('user_id', userId)
+            ]
+        );
+        
+        if (existingMember.documents.length > 0) {
+            const doc = existingMember.documents[0];
+            return {
+                $id: doc.$id,
+                group_id: doc.group_id,
+                user_id: doc.user_id,
+                added_at: doc.added_at
+            } as GroupMember;
+        }
+        
+        // Add user to group
+        const doc = await databases.createDocument(
+            DATABASES.MAIN,
+            COLLECTIONS.GROUP_MEMBERS,
+            ID.unique(),
+            {
+                group_id: groupId,
+                user_id: userId,
+                added_at: new Date().toISOString()
+            }
+        );
+        return {
+            $id: doc.$id,
+            group_id: doc.group_id,
+            user_id: doc.user_id,
+            added_at: doc.added_at
+        } as GroupMember;
+    } catch (error) {
+        console.error("Error adding user to group:", error);
+        throw error;
+    }
+};
+
+/**
+ * Remove a user from a group
+ * @param groupId Group ID to remove user from
+ * @param userId User ID to remove from group
+ * @returns Response from delete operation
+ */
+export const removeUserFromGroup = async (groupId: string, userId: string) => {
+    try {
+        // Find the group member document
+        const memberDoc = await databases.listDocuments(
+            DATABASES.MAIN,
+            COLLECTIONS.GROUP_MEMBERS,
+            [
+                Query.equal('group_id', groupId),
+                Query.equal('user_id', userId)
+            ]
+        );
+        
+        if (memberDoc.documents.length === 0) {
+            throw new Error('User is not a member of this group');
+        }
+        
+        // Delete the group member document
+        return await databases.deleteDocument(
+            DATABASES.MAIN,
+            COLLECTIONS.GROUP_MEMBERS,
+            memberDoc.documents[0].$id
+        );
+    } catch (error) {
+        console.error("Error removing user from group:", error);
+        throw error;
+    }
+};
+
+/**
+ * Get all members of a group
+ * @param groupId Group ID to get members for
+ * @returns Array of group members with user details
+ */
+export const getGroupMembers = async (groupId: string) => {
+    try {
+        const members = await databases.listDocuments(
+            DATABASES.MAIN,
+            COLLECTIONS.GROUP_MEMBERS,
+            [Query.equal('group_id', groupId)]
+        );
+        
+        // Get user details for each member
+        const membersWithDetails = await Promise.all(
+            members.documents.map(async (doc) => {
+                try {
+                    // Get user profile to get the name
+                    const userProfile = await getUserProfile(doc.user_id);
+                    
+                    return {
+                        $id: doc.$id,
+                        group_id: doc.group_id,
+                        user_id: doc.user_id,
+                        user_name: userProfile?.name || 'Unknown User',
+                        added_at: doc.added_at
+                    };
+                } catch  {
+                    // If there's an error getting the user, return basic info
+                    return {
+                        $id: doc.$id,
+                        group_id: doc.group_id,
+                        user_id: doc.user_id,
+                        user_name: 'Unknown User',
+                        added_at: doc.added_at
+                    };
+                }
+            })
+        );
+        
+        return membersWithDetails;
+    } catch (error) {
+        console.error("Error fetching group members:", error);
+        throw error;
+    }
+};
+
+/**
+ * Get all groups that a user is a member of
+ * @param userId User ID to get groups for (defaults to current user)
+ * @returns Array of groups
+ */
+export const getUserMemberships = async (userId?: string) => {
+    try {
+        if (!userId) {
+            const currentUser = await getCurrentUser();
+            if (!currentUser) {
+                throw new Error('User not authenticated');
+            }
+            userId = currentUser.$id;
+        }
+        
+        // Get all group memberships for the user
+        const memberships = await databases.listDocuments(
+            DATABASES.MAIN,
+            COLLECTIONS.GROUP_MEMBERS,
+            [Query.equal('user_id', userId)]
+        );
+        
+        // Get the actual groups based on the group IDs
+        const groupIds = memberships.documents.map(doc => doc.group_id);
+        const groups: Group[] = [];
+        
+        for (const groupId of groupIds) {
+            try {
+                const group = await getGroup(groupId);
+                groups.push(group);
+            } catch (error) {
+                console.error(`Error fetching group ${groupId}:`, error);
+                // Continue with other groups if one fails
+            }
+        }
+        
+        return groups;
+    } catch (error) {
+        console.error("Error fetching user memberships:", error);
+        throw error;
+    }
+};
+
+/**
+ * Get all posts visible to the current user
+ * This includes:
+ * 1. Public posts
+ * 2. User's own private posts
+ * 3. Posts shared with groups the user is a member of
+ * @param limit Maximum number of posts to return
+ * @returns Array of posts visible to the current user
+ */
+export const getVisiblePosts = async (limit = 10) => {
+    try {
+        const currentUser = await getCurrentUser();
+        if (!currentUser) {
+            // If not authenticated, only return public posts
+            return await databases.listDocuments(
+                DATABASES.MAIN,
+                COLLECTIONS.POSTS,
+                [
+                    Query.equal('visibility', 'public'),
+                    Query.orderDesc('created_at'),
+                    Query.limit(limit)
+                ]
+            );
+        }
+        
+        // Get all groups the user is a member of
+        const userGroups = await getUserMemberships();
+        const groupIds = userGroups.map(group => group.$id);
+        
+        // Get all posts visible to the user
+        // 1. Public posts
+        // 2. User's own private posts
+        // 3. Posts shared with groups the user is a member of
+        const allPosts = await databases.listDocuments(
+            DATABASES.MAIN,
+            COLLECTIONS.POSTS,
+            [Query.orderDesc('created_at'), Query.limit(100)] // Get more than we need for filtering
+        );
+        
+        // Filter posts based on visibility permissions
+        const visiblePosts = allPosts.documents.filter(post => {
+            // Public posts are visible to everyone
+            if (post.visibility === 'public') return true;
+            
+            // Private posts are only visible to the creator
+            if (post.visibility === 'private' && post.user_id === currentUser.$id) return true;
+            
+            // Group posts are visible to members of the included groups
+            if (post.visibility === 'groups' && Array.isArray(post.group_id)) {
+                // Check if any of the user's groups are in the post's group_id
+                return post.group_id.some((gid: string) => groupIds.includes(gid));
+            }
+            
+            return false;
+        });
+        
+        // Return the top X posts based on limit
+        return {
+            ...allPosts,
+            documents: visiblePosts.slice(0, limit)
+        };
+    } catch (error) {
+        console.error("Error fetching visible posts:", error);
+        throw error;
+    }
+};
+
+/**
+ * Get private posts for the current user
+ * @param limit Maximum number of posts to return
+ * @returns Array of private posts for the current user
+ */
+export const getPrivatePosts = async (limit = 10) => {
+    try {
+        const currentUser = await getCurrentUser();
+        if (!currentUser) {
+            throw new Error('User not authenticated');
+        }
+        
+        return await databases.listDocuments(
+            DATABASES.MAIN,
+            COLLECTIONS.POSTS,
+            [
+                Query.equal('user_id', currentUser.$id),
+                Query.equal('visibility', 'private'),
+                Query.orderDesc('created_at'),
+                Query.limit(limit)
+            ]
+        );
+    } catch (error) {
+        console.error("Error fetching private posts:", error);
+        throw error;
+    }
+};
+
+/**
+ * Get all users from the database
+ * @param limit Maximum number of users to return, defaults to 100
+ * @returns Array of user objects
+ */
+export const getAllUsers = async (limit = 100) => {
+    try {
+        // Get all users from the users collection
+        const usersResult = await databases.listDocuments(
+            DATABASES.MAIN,
+            COLLECTIONS.USERS,
+            [Query.limit(limit)]
+        );
+        
+        return usersResult.documents.map(doc => ({
+            userId: doc.userId || doc.$id,
+            name: doc.name || 'Anonymous User',
+            email: doc.email,
+            profilePictureId: doc.profilePictureId,
+            bio: doc.bio || null,
+            created_at: doc.created_at
+        }));
+    } catch {
+        console.error("Error fetching all users");
+        return []; // Return empty array instead of throwing
     }
 }; 

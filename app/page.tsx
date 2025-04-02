@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useRef } from "react";
-import { getPosts } from "@/lib/appwrite"
+import { getVisiblePosts } from "@/lib/appwrite"
 import { PostCard } from "@/components/ui/PostCard"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -16,6 +16,8 @@ interface PostDocument extends Models.Document {
   created_at: string;
   image?: string;
   user_name?: string;
+  visibility?: 'public' | 'private' | 'groups';
+  group_id?: string[];
 }
 
 interface PostsState {
@@ -36,7 +38,7 @@ export default function Home() {
       setIsLoading(true);
       setError(null);
       try {
-        const fetchedPosts = await getPosts(20);
+        const fetchedPosts = await getVisiblePosts(20);
         setPosts(fetchedPosts as unknown as PostsState);
       } catch (err) {
         console.error("Error fetching posts:", err);
@@ -243,6 +245,8 @@ export default function Home() {
                       imageId={posts.documents[0].image}
                       userName={posts.documents[0].user_name}
                       featured={true}
+                      visibility={posts.documents[0].visibility}
+                      groupIds={posts.documents[0].group_id}
                     />
                   </div>
                 </div>
@@ -261,6 +265,8 @@ export default function Home() {
                       createdAt={post.created_at}
                       imageId={post.image}
                       userName={post.user_name}
+                      visibility={post.visibility}
+                      groupIds={post.group_id}
                     />
                   </div>
                 ))}

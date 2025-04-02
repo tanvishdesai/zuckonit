@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import { PlusCircle, LogOut, User, Home, Menu, X, Settings, Compass, Info } from 'lucide-react';
+import { PlusCircle, LogOut, User, Home, Menu, X, Settings, Compass, Info, Users } from 'lucide-react';
 import { useState } from 'react';
 import { getProfilePictureUrl } from '@/lib/appwrite';
 
@@ -50,6 +50,14 @@ export function Navbar() {
               Explore
             </span>
           </Link>
+          {user && (
+            <Link href="/groups" className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary">
+              <span className="flex items-center gap-1">
+                <Users className="h-4 w-4" />
+                Groups
+              </span>
+            </Link>
+          )}
           <Link href="/about" className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary">
             <span className="flex items-center gap-1">
               <Info className="h-4 w-4" />
@@ -153,6 +161,16 @@ export function Navbar() {
                 <Compass className="h-4 w-4" />
                 Explore
               </Link>
+              {user && (
+                <Link 
+                  href="/groups" 
+                  className="flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-accent rounded text-muted-foreground"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <Users className="h-4 w-4" />
+                  Groups
+                </Link>
+              )}
               <Link 
                 href="/about" 
                 className="flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-accent rounded text-muted-foreground"

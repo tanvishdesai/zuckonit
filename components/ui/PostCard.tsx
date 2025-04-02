@@ -6,6 +6,8 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/componen
 import { Button } from '@/components/ui/button';
 import { formatDistance } from 'date-fns';
 import { getImageUrl } from '@/lib/appwrite';
+import { Lock, Globe, Users } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 
 interface PostCardProps {
   id: string;
@@ -18,6 +20,8 @@ interface PostCardProps {
   userName?: string;
   featured?: boolean;
   className?: string;
+  visibility?: 'public' | 'private' | 'groups';
+  groupIds?: string[];
 }
 
 export function PostCard({
@@ -30,7 +34,9 @@ export function PostCard({
   showControls = false,
   userName,
   featured = false,
-  className = ''
+  className = '',
+  visibility = 'public',
+  groupIds = []
 }: PostCardProps) {
   const maxLength = featured ? 300 : 150;
   const truncatedContent = content.length > maxLength 
@@ -42,6 +48,33 @@ export function PostCard({
   const handleDelete = () => {
     if (onDelete) {
       onDelete(id);
+    }
+  };
+
+  // Render visibility icon and label
+  const renderVisibilityBadge = () => {
+    switch(visibility) {
+      case 'private':
+        return (
+          <Badge variant="outline" className="flex items-center gap-1 bg-rose-500/10 text-rose-500 border-rose-500/20">
+            <Lock className="h-3 w-3" />
+            <span>Private</span>
+          </Badge>
+        );
+      case 'groups':
+        return (
+          <Badge variant="outline" className="flex items-center gap-1 bg-amber-500/10 text-amber-500 border-amber-500/20">
+            <Users className="h-3 w-3" />
+            <span>{groupIds.length} {groupIds.length === 1 ? 'Group' : 'Groups'}</span>
+          </Badge>
+        );
+      default:
+        return (
+          <Badge variant="outline" className="flex items-center gap-1 bg-emerald-500/10 text-emerald-500 border-emerald-500/20">
+            <Globe className="h-3 w-3" />
+            <span>Public</span>
+          </Badge>
+        );
     }
   };
 
@@ -62,6 +95,7 @@ export function PostCard({
           />
         </div>
       )}
+      
       <div className="flex flex-col h-full">
         <CardHeader>
           <CardTitle className={`
@@ -70,10 +104,12 @@ export function PostCard({
           `}>
             {title}
           </CardTitle>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
+          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground mt-1">
             {userName && <span>By {userName}</span>}
             <span>•</span>
             <span>{formattedDate}</span>
+            <span>•</span>
+            {renderVisibilityBadge()}
           </div>
         </CardHeader>
         <CardContent className="flex-grow">

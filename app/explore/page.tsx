@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { PostCard } from '@/components/ui/PostCard';
 import { UserCard } from '@/components/ui/UserCard';
-import { getPosts, getPopularAuthors, searchUsers, getProfilePictureUrl } from '@/lib/appwrite';
+import { getVisiblePosts, getPopularAuthors, searchUsers, getProfilePictureUrl } from '@/lib/appwrite';
 import { Search, User, MessageSquare, ArrowRight, Users, FileText } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Link from 'next/link';
@@ -51,7 +51,7 @@ export default function ExplorePage() {
         
         // Fetch posts and authors in parallel
         const [postsData, authorsData] = await Promise.all([
-          getPosts(50, { filter: 'random' }),
+          getVisiblePosts(50),
           getPopularAuthors(4)
         ]);
         

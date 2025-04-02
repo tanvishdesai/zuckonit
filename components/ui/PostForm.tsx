@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { createPost, updatePost, uploadImage } from '@/lib/appwrite';
+import { createPost, updatePost, uploadImage, getUserGroups, PostVisibility, Group } from '@/lib/appwrite';
 import { useRouter } from 'next/navigation';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -12,6 +12,9 @@ import Typography from '@tiptap/extension-typography';
 import Heading from '@tiptap/extension-heading';
 import { Toggle } from '@/components/ui/toggle';
 import { Bold, Italic, Heading1, Heading2, Heading3, Quote, List, ListOrdered, Highlighter } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 
 interface PostFormProps {
   initialData?: {
@@ -19,6 +22,8 @@ interface PostFormProps {
     title: string;
     content: string;
     imageId?: string;
+    visibility?: PostVisibility;
+    group_id?: string[];
   };
   mode: 'create' | 'edit';
 }
@@ -29,6 +34,22 @@ export function PostForm({ initialData, mode = 'create' }: PostFormProps) {
   const [title, setTitle] = useState(initialData?.title || '');
   const [error, setError] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [visibility, setVisibility] = useState<PostVisibility>(initialData?.visibility || 'public');
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [selectedGroups, setSelectedGroups] = useState<string[]>(initialData?.group_id || []);
+
+  // Load user's groups
+  useEffect(() => {
+    const loadGroups = async () => {
+      try {
+        const userGroups = await getUserGroups();
+        setGroups(userGroups);
+      } catch (error) {
+        console.error('Error loading groups:', error);
+      }
+    };
+    loadGroups();
+  }, []);
 
   const editor = useEditor({
     extensions: [
@@ -74,10 +95,22 @@ export function PostForm({ initialData, mode = 'create' }: PostFormProps) {
       }
 
       if (mode === 'create') {
-        await createPost(title, editor.getHTML(), imageId);
+        await createPost(
+          title,
+          editor.getHTML(),
+          visibility,
+          visibility === 'groups' ? selectedGroups : [],
+          imageId
+        );
         router.push('/');
       } else if (initialData?.id) {
-        await updatePost(initialData.id, { title, content: editor.getHTML(), image: imageId });
+        await updatePost(initialData.id, {
+          title,
+          content: editor.getHTML(),
+          image: imageId,
+          visibility,
+          group_id: visibility === 'groups' ? selectedGroups : []
+        });
         router.push(`/post/${initialData.id}`);
       }
     } catch (error) {
@@ -230,6 +263,48 @@ export function PostForm({ initialData, mode = 'create' }: PostFormProps) {
         <p className="text-sm text-muted-foreground mt-1">
           Add a featured image for your post
         </p>
+      </div>
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <Label>Post Visibility</Label>
+          <Select
+            value={visibility}
+            onValueChange={(value: PostVisibility) => setVisibility(value)}
+            disabled={isLoading}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select visibility" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="public">Public</SelectItem>
+              <SelectItem value="private">Private</SelectItem>
+              <SelectItem value="groups">Selected Groups</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        {visibility === 'groups' && (
+          <div className="space-y-2">
+            <Label>Select Groups</Label>
+            <div className="space-y-2">
+              {groups.map((group) => (
+                <div key={group.$id} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={group.$id}
+                    checked={selectedGroups.includes(group.$id)}
+                    onCheckedChange={(checked: boolean) => {
+                      if (checked) {
+                        setSelectedGroups([...selectedGroups, group.$id]);
+                      } else {
+                        setSelectedGroups(selectedGroups.filter(id => id !== group.$id));
+                      }
+                    }}
+                  />
+                  <Label htmlFor={group.$id}>{group.name}</Label>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
       {error && <p className="text-red-500 text-sm">{error}</p>}
       <div className="flex justify-end gap-2">
