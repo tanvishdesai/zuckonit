@@ -137,8 +137,8 @@ export default function UserProfilePage() {
     ? format(new Date(user.posts[user.posts.length - 1].created_at), 'MMMM yyyy')
     : 'Unknown';
   
-  // Check both possible profile picture ID field names  
-  const profilePictureId = user.profilePictureId || user.profile_picture;
+  // Check for profilePictureId field only
+  const profilePictureId = user.profilePictureId;
   const profilePictureUrl = profilePictureId 
     ? getProfilePictureUrl(profilePictureId).toString() 
     : null;

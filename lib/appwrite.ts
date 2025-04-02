@@ -210,8 +210,7 @@ export const uploadProfilePicture = async (file: File) => {
             COLLECTIONS.USERS,
             currentUser.$id,
             {
-                profilePictureId: upload.$id,
-                profile_picture: upload.$id // Add both field names for backward compatibility
+                profilePictureId: upload.$id
             }
         );
         
@@ -697,7 +696,7 @@ export const getUserById = async (userId: string): Promise<Record<string, unknow
                 userId: user.$id,
                 name: user.name,
                 email: user.email,
-                profilePictureId: user.profilePictureId || user.profile_picture,
+                profilePictureId: user.profilePictureId,
                 bio: user.bio,
                 created_at: user.created_at,
                 postCount: postsQuery.documents.length || 0,
