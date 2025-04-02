@@ -210,7 +210,8 @@ export const uploadProfilePicture = async (file: File) => {
             COLLECTIONS.USERS,
             currentUser.$id,
             {
-                profilePictureId: upload.$id
+                profilePictureId: upload.$id,
+                profile_picture: upload.$id // Add both field names for backward compatibility
             }
         );
         
@@ -682,32 +683,56 @@ export const getUserById = async (userId: string): Promise<Record<string, unknow
                 userId
             );
             
+            // Get user's posts
+            const postsQuery = await databases.listDocuments(
+                DATABASES.MAIN,
+                COLLECTIONS.POSTS,
+                [
+                    Query.equal('user_id', userId),
+                    Query.orderDesc('created_at')
+                ]
+            );
+            
             return {
                 userId: user.$id,
                 name: user.name,
                 email: user.email,
-                profilePictureId: user.profile_picture,
+                profilePictureId: user.profilePictureId || user.profile_picture,
                 bio: user.bio,
                 created_at: user.created_at,
-                postCount: user.post_count || 0,
+                postCount: postsQuery.documents.length || 0,
+                posts: postsQuery.documents
             };
-        } catch {
+        } catch (error) {
+            console.error("Error fetching user from users collection:", error);
             // If not found in users collection, try to get from Appwrite accounts
             try {
                 const user = await account.get();
                 
                 if (user.$id === userId) {
+                    // Try to get user's posts
+                    const postsQuery = await databases.listDocuments(
+                        DATABASES.MAIN,
+                        COLLECTIONS.POSTS,
+                        [
+                            Query.equal('user_id', userId),
+                            Query.orderDesc('created_at')
+                        ]
+                    );
+                    
                     return {
                         userId: user.$id,
                         name: user.name,
                         email: user.email,
-                        profilePictureId: null,
+                        profilePictureId: user.prefs?.profilePictureId || null,
                         bio: null,
                         created_at: null,
-                        postCount: 0,
+                        postCount: postsQuery.documents.length || 0,
+                        posts: postsQuery.documents
                     };
                 }
-            } catch {
+            } catch (accountError) {
+                console.error("Error fetching user from account:", accountError);
                 // Not found in Appwrite accounts either
                 return null;
             }
@@ -1124,6 +1149,9 @@ export const getVisiblePosts = async (limit = 10) => {
             
             // Private posts are only visible to the creator
             if (post.visibility === 'private' && post.user_id === currentUser.$id) return true;
+            
+            // User's own posts should always be visible to them regardless of visibility
+            if (post.user_id === currentUser.$id) return true;
             
             // Group posts are visible to members of the included groups
             if (post.visibility === 'groups' && Array.isArray(post.group_id)) {

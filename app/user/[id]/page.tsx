@@ -32,6 +32,7 @@ interface UserProfile {
   postCount: number;
   posts: Post[];
   profilePictureId?: string | null;
+  profile_picture?: string | null;
   bio?: string | null;
 }
 
@@ -52,7 +53,16 @@ export default function UserProfilePage() {
       try {
         setLoading(true);
         const userData = await getUserById(id as string);
-        setUser(userData as unknown as UserProfile);
+        
+        // Ensure userData has the expected structure before setting it
+        if (userData) {
+          const userPosts = Array.isArray(userData.posts) ? userData.posts : [];
+          setUser({
+            ...userData,
+            posts: userPosts,
+            postCount: userPosts.length
+          } as unknown as UserProfile);
+        }
       } catch (err) {
         console.error('Error fetching user:', err);
         setError('Could not load user profile');
@@ -123,11 +133,22 @@ export default function UserProfilePage() {
   }
 
   // Format date of first post for user's "member since" date
-  const memberSince = user.posts.length > 0 
+  const memberSince = user.posts && user.posts.length > 0 
     ? format(new Date(user.posts[user.posts.length - 1].created_at), 'MMMM yyyy')
     : 'Unknown';
-    
-  const profilePictureUrl = user.profilePictureId ? getProfilePictureUrl(user.profilePictureId).toString() : null;
+  
+  // Check both possible profile picture ID field names  
+  const profilePictureId = user.profilePictureId || user.profile_picture;
+  const profilePictureUrl = profilePictureId 
+    ? getProfilePictureUrl(profilePictureId).toString() 
+    : null;
+
+  console.log("Profile data:", { 
+    userId: user.userId, 
+    name: user.name, 
+    profilePictureId, 
+    profilePictureUrl 
+  });
 
   return (
     <div className="container max-w-6xl py-10 animate-fade-in">
@@ -198,27 +219,31 @@ export default function UserProfilePage() {
                   Posts by {user.name}
                 </h2>
 
-                {user.posts.filter(post => post.visibility !== 'private').length === 0 ? (
+                {user.posts && user.posts.filter(post => post && post.visibility !== 'private').length === 0 ? (
                   <div className="text-center py-10 bg-secondary/20 rounded-lg">
                     <h3 className="text-lg font-medium">No posts yet</h3>
                     <p className="text-muted-foreground">You haven&apos;t published any public posts.</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {user.posts.filter(post => post.visibility !== 'private').map((post: Post) => (
-                      <PostCard
-                        key={post.$id}
-                        id={post.$id}
-                        title={post.title}
-                        content={post.content}
-                        createdAt={post.created_at}
-                        imageId={post.image}
-                        userName={post.user_name}
-                        className="h-full"
-                        visibility={post.visibility as 'public' | 'private' | 'groups'}
-                        groupIds={post.group_id}
-                      />
-                    ))}
+                    {user.posts && 
+                      user.posts
+                        .filter(post => post && post.visibility !== 'private')
+                        .map((post: Post) => (
+                          <PostCard
+                            key={post.$id}
+                            id={post.$id}
+                            title={post.title}
+                            content={post.content}
+                            createdAt={post.created_at}
+                            imageId={post.image}
+                            userName={post.user_name}
+                            className="h-full"
+                            visibility={post.visibility as 'public' | 'private' | 'groups'}
+                            groupIds={post.group_id}
+                          />
+                        ))
+                    }
                   </div>
                 )}
               </TabsContent>
@@ -282,27 +307,31 @@ export default function UserProfilePage() {
               Posts by {user.name}
             </h2>
 
-            {user.posts.length === 0 ? (
+            {user.posts && user.posts.length === 0 ? (
               <div className="text-center py-10 bg-secondary/20 rounded-lg">
                 <h3 className="text-lg font-medium">No posts yet</h3>
                 <p className="text-muted-foreground">This user hasn&apos;t published any posts.</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {user.posts.map((post: Post) => (
-                  <PostCard
-                    key={post.$id}
-                    id={post.$id}
-                    title={post.title}
-                    content={post.content}
-                    createdAt={post.created_at}
-                    imageId={post.image}
-                    userName={post.user_name}
-                    className="h-full"
-                    visibility={post.visibility as 'public' | 'private' | 'groups'}
-                    groupIds={post.group_id}
-                  />
-                ))}
+                {user.posts && 
+                  user.posts
+                    .filter(post => post && post.visibility !== 'private')
+                    .map((post: Post) => (
+                      <PostCard
+                        key={post.$id}
+                        id={post.$id}
+                        title={post.title}
+                        content={post.content}
+                        createdAt={post.created_at}
+                        imageId={post.image}
+                        userName={post.user_name}
+                        className="h-full"
+                        visibility={post.visibility as 'public' | 'private' | 'groups'}
+                        groupIds={post.group_id}
+                      />
+                    ))
+                }
               </div>
             )}
           </div>

@@ -88,6 +88,11 @@ export default function PostPage({ params }: PageProps) {
         return false;
       }
       
+      // User's own posts should always be accessible to them
+      if (post.user_id === currentUser.$id) {
+        return true;
+      }
+      
       // Private posts are only accessible to the owner
       if (post.visibility === 'private') {
         return post.user_id === currentUser.$id;
