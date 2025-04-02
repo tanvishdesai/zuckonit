@@ -5,7 +5,6 @@ import Image from 'next/image';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { formatDistance } from 'date-fns';
-import ReactMarkdown from 'react-markdown';
 import { getImageUrl } from '@/lib/appwrite';
 
 interface PostCardProps {
@@ -33,8 +32,6 @@ export function PostCard({
   featured = false,
   className = ''
 }: PostCardProps) {
-  // Truncate content for preview with smarter handling 
-  // Calculate based on featured status to determine appropriate length
   const maxLength = featured ? 300 : 150;
   const truncatedContent = content.length > maxLength 
     ? `${content.slice(0, maxLength)}...` 
@@ -84,8 +81,10 @@ export function PostCard({
             prose dark:prose-invert max-w-none
             ${featured ? 'line-clamp-6' : 'line-clamp-3'} 
             text-sm sm:text-base
+            prose-headings:font-bold prose-h1:text-xl prose-h2:text-lg prose-h3:text-base
+            prose-strong:font-bold prose-em:italic
           `}>
-            <ReactMarkdown>{truncatedContent}</ReactMarkdown>
+            <div dangerouslySetInnerHTML={{ __html: truncatedContent }} />
           </div>
         </CardContent>
         <CardFooter className="flex justify-between mt-auto pt-4">

@@ -84,11 +84,16 @@ export default function ExplorePage() {
     try {
       const query = searchQuery.toLowerCase();
       
-      // Search posts
+      // Search posts - strip HTML tags for content searching
+      const stripHtml = (html: string) => {
+        // Create a safer HTML stripping function that works server and client side
+        return html.replace(/<[^>]*>?/gm, '');
+      };
+      
       const postResults = posts.filter(
         post => 
           post.title.toLowerCase().includes(query) || 
-          post.content.toLowerCase().includes(query) ||
+          stripHtml(post.content).toLowerCase().includes(query) ||
           (post.user_name && post.user_name.toLowerCase().includes(query))
       );
       

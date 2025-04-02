@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { getPost, deletePost, getImageUrl } from '@/lib/appwrite';
 import { formatDistance } from 'date-fns';
-import ReactMarkdown from 'react-markdown';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import Link from 'next/link';
@@ -101,7 +100,7 @@ export default function PostPage({ params }: PageProps) {
   const formattedDate = formatDistance(new Date(post.created_at), new Date(), { addSuffix: true });
 
   return (
-    <div className="container max-w-4xl py-8 animate-fade-in">
+    <div className="container max-w-4xl py-8 animate-fade-in mx-auto">
       <Card className="overflow-hidden mb-10 border">
         {post.image && (
           <div className="relative w-full h-[400px]">
@@ -113,27 +112,27 @@ export default function PostPage({ params }: PageProps) {
             />
           </div>
         )}
-        <div className="p-6 space-y-6">
-          <div className="space-y-2">
-            <div className="flex items-center space-x-4">
+        <div className="p-6 md:p-8 space-y-6">
+          <div className="space-y-4 text-center">
+            <div className="flex items-center justify-between">
               <Link href="/">
                 <Button variant="ghost" size="sm" className="text-foreground hover:bg-accent">
                   <ArrowLeft className="h-4 w-4 mr-1" />
                   <span>Back</span>
                 </Button>
               </Link>
-              <h1 className="text-3xl font-bold">{post.title}</h1>
             </div>
-            <div className="flex items-center text-muted-foreground">
+            <h1 className="text-3xl md:text-4xl font-bold mt-4">{post.title}</h1>
+            <div className="flex items-center justify-center text-muted-foreground">
               <span>Posted by {post.user_name}</span>
               <span className="mx-2">•</span>
               <span>{formattedDate}</span>
             </div>
           </div>
-          <div className="prose dark:prose-invert max-w-none">
-            <ReactMarkdown>{post.content}</ReactMarkdown>
+          <div className="prose dark:prose-invert max-w-none mx-auto prose-headings:font-bold prose-h1:text-3xl prose-h2:text-2xl prose-h3:text-xl prose-h4:text-lg prose-strong:font-bold prose-em:italic prose-ul:list-disc prose-ol:list-decimal">
+            <div dangerouslySetInnerHTML={{ __html: post.content }} />
           </div>
-          <div className="flex gap-2 pt-4">
+          <div className="flex justify-center gap-2 pt-6">
             
             {user && user.$id === post.user_id && (
               <>

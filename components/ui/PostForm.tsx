@@ -2,10 +2,16 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { createPost, updatePost, uploadImage } from '@/lib/appwrite';
 import { useRouter } from 'next/navigation';
+import { useEditor, EditorContent } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import Highlight from '@tiptap/extension-highlight';
+import Typography from '@tiptap/extension-typography';
+import Heading from '@tiptap/extension-heading';
+import { Toggle } from '@/components/ui/toggle';
+import { Bold, Italic, Heading1, Heading2, Heading3, Quote, List, ListOrdered, Highlighter } from 'lucide-react';
 
 interface PostFormProps {
   initialData?: {
@@ -21,9 +27,27 @@ export function PostForm({ initialData, mode = 'create' }: PostFormProps) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [title, setTitle] = useState(initialData?.title || '');
-  const [content, setContent] = useState(initialData?.content || '');
-  const [imageFile, setImageFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        heading: false,
+      }),
+      Highlight,
+      Typography,
+      Heading.configure({
+        levels: [1, 2, 3],
+      }),
+    ],
+    content: initialData?.content || '',
+    editorProps: {
+      attributes: {
+        class: 'prose dark:prose-invert prose-headings:font-bold prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg max-w-none focus:outline-none min-h-[300px] max-h-[600px] overflow-y-auto p-4 rounded-md border border-input bg-background',
+      },
+    },
+  });
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] || null;
@@ -33,7 +57,7 @@ export function PostForm({ initialData, mode = 'create' }: PostFormProps) {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     
-    if (!title.trim() || !content.trim()) {
+    if (!title.trim() || !editor?.getHTML()) {
       setError('Title and content are required');
       return;
     }
@@ -44,17 +68,16 @@ export function PostForm({ initialData, mode = 'create' }: PostFormProps) {
 
       let imageId = initialData?.imageId;
 
-      // Handle image upload if there's a new image
       if (imageFile) {
         const uploadedImage = await uploadImage(imageFile);
         imageId = uploadedImage.id;
       }
 
       if (mode === 'create') {
-        await createPost(title, content, imageId);
+        await createPost(title, editor.getHTML(), imageId);
         router.push('/');
       } else if (initialData?.id) {
-        await updatePost(initialData.id, { title, content, image: imageId });
+        await updatePost(initialData.id, { title, content: editor.getHTML(), image: imageId });
         router.push(`/post/${initialData.id}`);
       }
     } catch (error) {
@@ -63,6 +86,90 @@ export function PostForm({ initialData, mode = 'create' }: PostFormProps) {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const MenuBar = () => {
+    if (!editor) {
+      return null;
+    }
+
+    return (
+      <div className="border border-input bg-transparent rounded-md mb-4">
+        <div className="flex flex-wrap gap-1 p-1">
+          <Toggle
+            size="sm"
+            pressed={editor.isActive('heading', { level: 1 })}
+            onPressedChange={() => {
+              editor.chain().focus().toggleHeading({ level: 1 }).run();
+            }}
+          >
+            <Heading1 className="h-4 w-4" />
+          </Toggle>
+          <Toggle
+            size="sm"
+            pressed={editor.isActive('heading', { level: 2 })}
+            onPressedChange={() => {
+              editor.chain().focus().toggleHeading({ level: 2 }).run();
+            }}
+          >
+            <Heading2 className="h-4 w-4" />
+          </Toggle>
+          <Toggle
+            size="sm"
+            pressed={editor.isActive('heading', { level: 3 })}
+            onPressedChange={() => {
+              editor.chain().focus().toggleHeading({ level: 3 }).run();
+            }}
+          >
+            <Heading3 className="h-4 w-4" />
+          </Toggle>
+          <Toggle
+            size="sm"
+            pressed={editor.isActive('bold')}
+            onPressedChange={() => editor.chain().focus().toggleBold().run()}
+          >
+            <Bold className="h-4 w-4" />
+          </Toggle>
+          <Toggle
+            size="sm"
+            pressed={editor.isActive('italic')}
+            onPressedChange={() => editor.chain().focus().toggleItalic().run()}
+          >
+            <Italic className="h-4 w-4" />
+          </Toggle>
+          <Toggle
+            size="sm"
+            pressed={editor.isActive('highlight')}
+            onPressedChange={() => editor.chain().focus().toggleHighlight().run()}
+          >
+            <Highlighter className="h-4 w-4" />
+          </Toggle>
+          <Toggle
+            size="sm"
+            pressed={editor.isActive('bulletList')}
+            onPressedChange={() => editor.chain().focus().toggleBulletList().run()}
+          >
+            <List className="h-4 w-4" />
+          </Toggle>
+          <Toggle
+            size="sm"
+            pressed={editor.isActive('orderedList')}
+            onPressedChange={() => editor.chain().focus().toggleOrderedList().run()}
+          >
+            <ListOrdered className="h-4 w-4" />
+          </Toggle>
+          <Toggle
+            size="sm"
+            pressed={editor.isActive('blockquote')}
+            onPressedChange={() => {
+              editor.chain().focus().toggleBlockquote().run();
+            }}
+          >
+            <Quote className="h-4 w-4" />
+          </Toggle>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -78,13 +185,40 @@ export function PostForm({ initialData, mode = 'create' }: PostFormProps) {
         />
       </div>
       <div>
-        <Textarea
-          placeholder="Write your post content here... (Markdown supported)"
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          disabled={isLoading}
-          className="min-h-[300px]"
-        />
+        <MenuBar />
+        <style jsx global>{`
+          .ProseMirror h1 {
+            font-size: 1.75rem;
+            font-weight: bold;
+            margin-top: 1.5rem;
+            margin-bottom: 0.5rem;
+          }
+          .ProseMirror h2 {
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-top: 1.25rem;
+            margin-bottom: 0.5rem;
+          }
+          .ProseMirror h3 {
+            font-size: 1.25rem;
+            font-weight: bold;
+            margin-top: 1rem;
+            margin-bottom: 0.5rem;
+          }
+          .ProseMirror p {
+            margin-bottom: 0.75rem;
+          }
+          .ProseMirror ul, .ProseMirror ol {
+            margin-left: 1.5rem;
+            margin-bottom: 0.75rem;
+          }
+          .ProseMirror blockquote {
+            border-left: 3px solid #e2e8f0;
+            padding-left: 1rem;
+            font-style: italic;
+          }
+        `}</style>
+        <EditorContent editor={editor} />
       </div>
       <div>
         <Input
