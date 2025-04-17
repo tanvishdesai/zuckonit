@@ -8,6 +8,7 @@ import { formatDistance } from 'date-fns';
 import { getImageUrl } from '@/lib/appwrite';
 import { Lock, Globe, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { TiptapContentRenderer } from './TiptapContentRenderer';
 
 interface PostCardProps {
   id: string;
@@ -22,6 +23,7 @@ interface PostCardProps {
   className?: string;
   visibility?: 'public' | 'private' | 'groups';
   groupIds?: string[];
+  postType?: 'standard' | 'blog';
 }
 
 export function PostCard({
@@ -36,13 +38,9 @@ export function PostCard({
   featured = false,
   className = '',
   visibility = 'public',
-  groupIds = []
+  groupIds = [],
+  postType = 'standard'
 }: PostCardProps) {
-  const maxLength = featured ? 300 : 150;
-  const truncatedContent = content.length > maxLength 
-    ? `${content.slice(0, maxLength)}...` 
-    : content;
-  
   const formattedDate = formatDistance(new Date(createdAt), new Date(), { addSuffix: true });
   
   const handleDelete = () => {
@@ -51,7 +49,6 @@ export function PostCard({
     }
   };
 
-  // Render visibility icon and label
   const renderVisibilityBadge = () => {
     switch(visibility) {
       case 'private':
@@ -80,31 +77,35 @@ export function PostCard({
 
   return (
     <Card className={`
-      overflow-hidden animate-fade-in 
+      overflow-hidden 
       ${featured ? 'md:grid md:grid-cols-2' : ''}
-      h-full transition-all hover:shadow-lg
+      h-full transition-all hover:shadow-lg flex flex-col
       ${className}
     `}>
       {imageId && (
-        <div className={`relative ${featured ? 'h-64 md:h-full' : 'h-48'} w-full`}>
+        <div className={`relative ${featured ? 'h-64 md:h-auto' : 'h-48'} w-full`}>
           <Image
             src={getImageUrl(imageId).toString()}
             alt={title}
             fill
             className="object-cover"
+            priority={featured}
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
           />
         </div>
       )}
       
-      <div className="flex flex-col h-full">
-        <CardHeader>
+      <div className="flex flex-col flex-grow p-4">
+        <CardHeader className="p-0 mb-2">
           <CardTitle className={`
             ${featured ? "text-2xl" : "text-xl"} 
-            line-clamp-2 leading-tight
+            line-clamp-2 leading-tight mb-1
           `}>
-            {title}
+            <Link href={`/post/${id}`} className="hover:text-primary transition-colors">
+              {title}
+            </Link>
           </CardTitle>
-          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground mt-1">
+          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
             {userName && <span>By {userName}</span>}
             <span>•</span>
             <span>{formattedDate}</span>
@@ -112,31 +113,31 @@ export function PostCard({
             {renderVisibilityBadge()}
           </div>
         </CardHeader>
-        <CardContent className="flex-grow">
-          <div className={`
-            prose dark:prose-invert max-w-none
-            ${featured ? 'line-clamp-6' : 'line-clamp-3'} 
-            text-sm sm:text-base
-            prose-headings:font-bold prose-h1:text-xl prose-h2:text-lg prose-h3:text-base
-            prose-strong:font-bold prose-em:italic
-          `}>
-            <div dangerouslySetInnerHTML={{ __html: truncatedContent }} />
-          </div>
+        <CardContent className="flex-grow p-0 mb-3">
+          <TiptapContentRenderer 
+            content={content} 
+            className={featured 
+              ? "text-sm sm:text-base line-clamp-[8] prose-headings:my-2 prose-p:my-1" 
+              : "text-sm sm:text-base line-clamp-3 prose-headings:my-2 prose-p:my-1"
+            }
+          />
         </CardContent>
-        <CardFooter className="flex justify-between mt-auto pt-4">
+        
+        <CardFooter className="p-0 mt-auto flex justify-between items-center">
           <Button 
-            variant={featured ? "default" : "outline"} 
+            variant={featured ? "default" : "link"}
+            size="sm" 
             asChild
-            className="transition-all hover:scale-105"
+            className={`${featured ? 'transition-all hover:scale-105' : 'p-0 h-auto'}`}
           >
             <Link href={`/post/${id}`}>Read More</Link>
           </Button>
           {showControls && (
             <div className="flex gap-2">
-              <Button variant="outline" asChild>
+              <Button variant="outline" size="sm" asChild>
                 <Link href={`/edit/${id}`}>Edit</Link>
               </Button>
-              <Button variant="destructive" onClick={handleDelete}>
+              <Button variant="destructive" size="sm" onClick={handleDelete}>
                 Delete
               </Button>
             </div>

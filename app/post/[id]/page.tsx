@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { getPost, deletePost, getImageUrl, getUserGroups, getUserMemberships, getCurrentUser } from '@/lib/appwrite';
 import { formatDistance } from 'date-fns';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -13,6 +13,7 @@ import { Comments } from '@/components/ui/Comments';
 import { useAuth } from '@/context/AuthContext';
 import { ArrowLeft, Loader2, Lock, Globe, Users } from 'lucide-react';
 import React from 'react';
+import { TiptapContentRenderer, TiptapGlobalStyles } from '@/components/ui/TiptapContentRenderer';
 
 // Define Post type
 interface Post {
@@ -25,16 +26,16 @@ interface Post {
   user_name: string;
   visibility?: 'public' | 'private' | 'groups';
   group_id?: string[];
+  post_type?: 'standard' | 'blog';
 }
 
 // Correct type definition for Next.js App Router page props
 interface PageProps {
-  params: Promise<{ id: string }>
+  params: { id: string };
 }
 
 export default function PostPage({ params }: PageProps) {
-  const resolvedParams = React.use(params);
-  const id = resolvedParams.id;
+  const id = params.id;
   const [post, setPost] = useState<Post | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -47,9 +48,10 @@ export default function PostPage({ params }: PageProps) {
     async function fetchPost() {
       try {
         setLoading(true);
+        setAccessDenied(false);
+        setError(null);
         const postData = await getPost(id);
         
-        // Check access permissions
         const hasAccess = await checkPostAccess(postData);
         if (!hasAccess) {
           setAccessDenied(true);
@@ -59,82 +61,82 @@ export default function PostPage({ params }: PageProps) {
         }
         
         setPost(postData as unknown as Post);
-        setError(null);
         
-        // If the post has group_id, fetch group names
         if (postData.visibility === 'groups' && postData.group_id && postData.group_id.length > 0) {
-          fetchGroupNames();
+           await fetchGroupNames(postData.group_id);
         }
       } catch (err) {
         console.error('Error fetching post:', err);
-        setError('Post not found');
+         if (err instanceof Error && err.message.includes('not found')) {
+           setError('Post not found or you don\'t have access.');
+         } else {
+           setError('Failed to load post.');
+         }
       } finally {
         setLoading(false);
       }
     }
 
-    // Check if user has access to the post
-    async function checkPostAccess(post: Record<string, unknown>): Promise<boolean> {
-      // Public posts are accessible to everyone
-      if (post.visibility === 'public') {
+    async function checkPostAccess(postData: Record<string, any>): Promise<boolean> {
+      if (!postData || !postData.visibility) return false;
+
+      if (postData.visibility === 'public') {
         return true;
       }
       
-      // Get current user
       const currentUser = await getCurrentUser();
       
-      // Not logged in and the post is not public
       if (!currentUser) {
         return false;
       }
       
-      // User's own posts should always be accessible to them
-      if (post.user_id === currentUser.$id) {
+      if (postData.user_id === currentUser.$id) {
         return true;
       }
       
-      // Private posts are only accessible to the owner
-      if (post.visibility === 'private') {
-        return post.user_id === currentUser.$id;
+      if (postData.visibility === 'private') {
+        return false;
       }
       
-      // Group posts are accessible to members of the group
-      if (post.visibility === 'groups' && Array.isArray(post.group_id)) {
-        // Get groups the user is a member of
-        const userGroups = await getUserMemberships();
-        const userGroupIds = userGroups.map(group => group.$id);
-        
-        // Check if the user is a member of any of the post's groups
-        return post.group_id.some((groupId: string) => userGroupIds.includes(groupId));
+      if (postData.visibility === 'groups' && Array.isArray(postData.group_id)) {
+         if (postData.group_id.length === 0) return false;
+         try {
+           const userMemberships = await getUserMemberships();
+           const userGroupIds = userMemberships.map(group => group.$id);
+           return postData.group_id.some((groupId: string) => userGroupIds.includes(groupId));
+         } catch (membershipError) {
+           console.error("Error fetching user memberships:", membershipError);
+           return false;
+         }
       }
       
       return false;
     }
 
-    async function fetchGroupNames() {
-      try {
-        // Get all groups the user has created
+    async function fetchGroupNames(groupIds: string[]) {
+       try {
         const userGroups = await getUserGroups();
         const groupMap: {[key: string]: string} = {};
-        
         userGroups.forEach(group => {
-          groupMap[group.$id] = group.name;
+          if (groupIds.includes(group.$id)) {
+             groupMap[group.$id] = group.name;
+          }
         });
-        
         setGroupNames(groupMap);
       } catch (err) {
         console.error('Error fetching group names:', err);
       }
     }
 
-    fetchPost();
+    if (id) {
+      fetchPost();
+    }
+
   }, [id]);
 
   const handleDeletePost = async () => {
-    if (!user || !post) return;
-    
-    if (post.user_id !== user.$id) {
-      alert('You can only delete your own posts');
+    if (!user || !post || post.user_id !== user.$id) {
+      alert('Action not allowed');
       return;
     }
     
@@ -143,42 +145,28 @@ export default function PostPage({ params }: PageProps) {
     }
     
     try {
+       setLoading(true);
       await deletePost(post.$id);
       router.push('/');
     } catch (err) {
       console.error('Error deleting post:', err);
-      alert('Failed to delete post');
+      setError('Failed to delete post');
+       setLoading(false);
     }
   };
 
-  // Function to render visibility badge
   const renderVisibilityBadge = () => {
     if (!post || !post.visibility) return null;
     
     switch(post.visibility) {
       case 'private':
-        return (
-          <Badge variant="outline" className="flex items-center gap-1 bg-rose-500/10 text-rose-500 border-rose-500/20">
-            <Lock className="h-3 w-3" />
-            <span>Private</span>
-          </Badge>
-        );
+        return <Badge variant="outline" className="bg-rose-500/10 text-rose-500 border-rose-500/20"><Lock className="h-3 w-3 mr-1" />Private</Badge>;
       case 'groups':
-        if (!post.group_id || post.group_id.length === 0) return null;
-        
-        return (
-          <Badge variant="outline" className="flex items-center gap-1 bg-amber-500/10 text-amber-500 border-amber-500/20">
-            <Users className="h-3 w-3" />
-            <span>{post.group_id.length} {post.group_id.length === 1 ? 'Group' : 'Groups'}</span>
-          </Badge>
-        );
+        const groupCount = post.group_id?.length || 0;
+        if (groupCount === 0) return null;
+        return <Badge variant="outline" className="bg-amber-500/10 text-amber-500 border-amber-500/20"><Users className="h-3 w-3 mr-1" />{groupCount} {groupCount === 1 ? 'Group' : 'Groups'}</Badge>;
       default:
-        return (
-          <Badge variant="outline" className="flex items-center gap-1 bg-emerald-500/10 text-emerald-500 border-emerald-500/20">
-            <Globe className="h-3 w-3" />
-            <span>Public</span>
-          </Badge>
-        );
+        return <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20"><Globe className="h-3 w-3 mr-1" />Public</Badge>;
     }
   };
 
@@ -190,20 +178,22 @@ export default function PostPage({ params }: PageProps) {
     );
   }
 
-  if (error || !post || accessDenied) {
+  if (error || !post) {
     return (
-      <div className="text-center py-10 animate-fade-in">
-        <h2 className="text-xl font-semibold mb-2">
-          {accessDenied ? 'Access Denied' : 'Post not found'}
-        </h2>
-        <p className="text-muted-foreground mb-4">
-          {accessDenied 
-            ? 'You do not have permission to view this post'
-            : 'The post you\'re looking for doesn\'t exist or has been removed'}
-        </p>
-        <Button asChild>
-          <Link href="/">Back to Home</Link>
-        </Button>
+      <div className="container max-w-2xl text-center py-10 animate-fade-in">
+        <Card className="p-6">
+          <h2 className="text-xl font-semibold mb-2">
+            {error || 'Post not found'}
+          </h2>
+          <p className="text-muted-foreground mb-4">
+            {accessDenied 
+              ? 'You might not have permission or the post may not exist.'
+              : 'The post you are looking for is unavailable.'}
+          </p>
+          <Button asChild variant="outline">
+            <Link href="/"><ArrowLeft className="h-4 w-4 mr-2" />Back to Home</Link>
+          </Button>
+        </Card>
       </div>
     );
   }
@@ -212,67 +202,72 @@ export default function PostPage({ params }: PageProps) {
 
   return (
     <div className="container max-w-4xl py-8 animate-fade-in mx-auto">
+      <TiptapGlobalStyles />
       <Card className="overflow-hidden mb-10 border">
         {post.image && (
-          <div className="relative w-full h-[400px]">
+          <div className="relative w-full h-[300px] md:h-[450px]">
             <Image
               src={getImageUrl(post.image).toString()}
               alt={post.title}
               fill
               className="object-cover"
+              priority
             />
           </div>
         )}
-        <div className="p-6 md:p-8 space-y-6">
-          <div className="space-y-4 text-center">
-            <div className="flex items-center justify-between">
-              <Link href="/">
-                <Button variant="ghost" size="sm" className="text-foreground hover:bg-accent">
-                  <ArrowLeft className="h-4 w-4 mr-1" />
-                  <span>Back</span>
-                </Button>
-              </Link>
+        
+        <CardHeader className="p-6">
+          <div className="flex items-center justify-between mb-4">
+             <Link href="/">
+               <Button variant="ghost" size="sm" className="text-foreground hover:bg-accent">
+                 <ArrowLeft className="h-4 w-4 mr-1" />
+                 <span>Back</span>
+               </Button>
+             </Link>
+             {user && user.$id === post.user_id && (
+               <div className="flex gap-2">
+                 <Button variant="outline" size="sm" asChild>
+                   <Link href={`/edit/${post.$id}`}>Edit Post</Link>
+                 </Button>
+                 <Button 
+                   type="button" 
+                   size="sm"
+                   variant="destructive"
+                   onClick={handleDeletePost}
+                   disabled={loading}
+                 >
+                   {loading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}
+                   Delete Post
+                 </Button>
+               </div>
+             )}
+          </div>
+          <CardTitle className="text-3xl md:text-4xl font-bold mt-2 mb-2">{post.title}</CardTitle>
+          <div className="flex flex-wrap items-center text-muted-foreground gap-x-3 gap-y-1 text-sm">
+            <span>Posted by <Link href={`/user/${post.user_id}`} className="hover:underline font-medium">{post.user_name}</Link></span>
+            <span>•</span>
+            <span>{formattedDate}</span>
+            <span>•</span>
+            {renderVisibilityBadge()}
+          </div>
+          
+          {post.visibility === 'groups' && post.group_id && post.group_id.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-3">
+              {post.group_id.map(groupId => (
+                <Badge key={groupId} variant="secondary" className="text-xs">
+                  {groupNames[groupId] || `Group...`}
+                </Badge>
+              ))}
             </div>
-            <h1 className="text-3xl md:text-4xl font-bold mt-4">{post.title}</h1>
-            <div className="flex flex-wrap items-center justify-center text-muted-foreground gap-2">
-              <span>Posted by {post.user_name}</span>
-              <span>•</span>
-              <span>{formattedDate}</span>
-              <span>•</span>
-              {renderVisibilityBadge()}
-            </div>
-            
-            {post.visibility === 'groups' && post.group_id && post.group_id.length > 0 && (
-              <div className="flex flex-wrap justify-center gap-2 mt-2">
-                {post.group_id.map(groupId => (
-                  <Badge key={groupId} variant="secondary" className="text-xs">
-                    {groupNames[groupId] || `Group ${groupId.substring(0, 6)}...`}
-                  </Badge>
-                ))}
-              </div>
-            )}
-          </div>
-          <div className="prose dark:prose-invert max-w-none mx-auto prose-headings:font-bold prose-h1:text-3xl prose-h2:text-2xl prose-h3:text-xl prose-h4:text-lg prose-strong:font-bold prose-em:italic prose-ul:list-disc prose-ol:list-decimal">
-            <div dangerouslySetInnerHTML={{ __html: post.content }} />
-          </div>
-          <div className="flex justify-center gap-2 pt-6">
-            
-            {user && user.$id === post.user_id && (
-              <>
-                <Button variant="outline" asChild>
-                  <Link href={`/edit/${post.$id}`}>Edit Post</Link>
-                </Button>
-                <Button 
-                  type="button" 
-                  variant="destructive"
-                  onClick={handleDeletePost}
-                >
-                  Delete Post
-                </Button>
-              </>
-            )}
-          </div>
-        </div>
+          )}
+        </CardHeader>
+
+        <CardContent className="p-6 pt-0">
+          <TiptapContentRenderer 
+            content={post.content} 
+            className="prose-lg prose-headings:font-bold prose-h1:text-3xl prose-h2:text-2xl prose-h3:text-xl prose-h4:text-lg prose-strong:font-bold prose-em:italic prose-ul:list-disc prose-ol:list-decimal" 
+          />
+        </CardContent>
       </Card>
       
       {/* Comments section */}

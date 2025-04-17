@@ -246,10 +246,11 @@ export const updateUserPrefs = async (prefs: Record<string, unknown>) => {
 
 // Helper functions for posts
 export const createPost = async (
-    title: string, 
-    content: string, 
-    visibility: PostVisibility = 'public', 
-    groupIds: string[] = [], 
+    title: string,
+    content: string, // Will be JSON stringified
+    post_type: 'standard' | 'blog', // New attribute
+    visibility: PostVisibility = 'public',
+    groupIds: string[] = [],
     imageId?: string
 ) => {
     try {
@@ -261,14 +262,15 @@ export const createPost = async (
         // Create post data object
         const postData: Record<string, unknown> = {
             title,
-            content,
+            content, // Store the stringified JSON
             image: imageId || null,
             created_at: new Date().toISOString(),
             user_id: currentUser.$id,
             user_name: currentUser.name,
-            visibility: visibility
+            visibility: visibility,
+            post_type: post_type // Save the post type
         };
-        
+
         // Only include group_id field if visibility is set to 'groups'
         if (visibility === 'groups') {
             postData.group_id = groupIds;
@@ -349,29 +351,30 @@ export const getPost = async (id: string) => {
 };
 
 export const updatePost = async (
-    id: string, 
-    data: Partial<{ 
-        title: string, 
-        content: string, 
-        image: string, 
+    id: string,
+    data: Partial<{
+        title: string,
+        content: string, // JSON stringified
+        image: string,
         visibility: PostVisibility,
-        group_id: string[]
+        group_id: string[],
+        post_type: 'standard' | 'blog' // New attribute
     }>
 ) => {
     try {
         // Create update data object
         const updateData: Record<string, unknown> = { ...data };
-        
+
         // If visibility is changing and not set to 'groups', remove group_id field
         if (updateData.visibility && updateData.visibility !== 'groups') {
-            delete updateData.group_id;
+            delete updateData.group_id; // Use delete operator for optional chaining safety
         }
-        
+
         // If visibility is set to 'groups' but group_id is empty or not provided, set to empty array
         if (updateData.visibility === 'groups' && !updateData.group_id) {
             updateData.group_id = [];
         }
-        
+
         return await databases.updateDocument(
             DATABASES.MAIN,
             COLLECTIONS.POSTS,
@@ -1225,5 +1228,26 @@ export const getAllUsers = async (limit = 100) => {
     } catch {
         console.error("Error fetching all users");
         return []; // Return empty array instead of throwing
+    }
+};
+
+// Add new function to get blog posts for a specific user
+export const getUserBlogPosts = async (userId: string, limit = 10) => {
+    try {
+        const queries = [
+            Query.equal('user_id', userId),
+            Query.equal('post_type', 'blog'), // Filter by blog type
+            Query.orderDesc('created_at'),    // Order by latest
+            Query.limit(limit)
+        ];
+
+        return await databases.listDocuments(
+            DATABASES.MAIN,
+            COLLECTIONS.POSTS,
+            queries
+        );
+    } catch (error) {
+        console.error("Error fetching user blog posts:", error);
+        throw error;
     }
 }; 
