@@ -4,6 +4,8 @@ type Props = {
   params: { id: string };
 }
 
-export default function PostPage({ params }: Props) {
-  return <PostClient postId={params.id} />;
+export default async function PostPage({ params }: Props) {
+  // Await params as per Next.js error message
+  const resolvedParams = await params;
+  return <PostClient postId={resolvedParams.id} />;
 } 
