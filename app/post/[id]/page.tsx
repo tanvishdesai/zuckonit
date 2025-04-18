@@ -77,8 +77,14 @@ export default function PostPage({ params }: PageProps) {
       }
     }
 
-    async function checkPostAccess(postData: Record<string, any>): Promise<boolean> {
+    async function checkPostAccess(postData: Record<string, unknown>): Promise<boolean> {
       if (!postData || !postData.visibility) return false;
+
+      // Prevent draft posts from being accessed by anyone except the author
+      if (postData.status === 'draft') {
+        const currentUser = await getCurrentUser();
+        return currentUser?.$id === postData.user_id;
+      }
 
       if (postData.visibility === 'public') {
         return true;

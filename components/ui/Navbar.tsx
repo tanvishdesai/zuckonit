@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import { PlusCircle, LogOut, User, Home, Menu, X, Settings, Compass, Info, Users } from 'lucide-react';
+import { PlusCircle, LogOut, User, Home, Menu, X, Settings, Compass, Info, Users, FileText } from 'lucide-react';
 import { useState } from 'react';
 import { getProfilePictureUrl } from '@/lib/appwrite';
 
@@ -114,6 +114,12 @@ export function Navbar() {
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
+                    <Link href="/my-drafts" className="cursor-pointer">
+                      <FileText className="mr-2 h-4 w-4" />
+                      My Drafts
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
                     <Link href="/" className="cursor-pointer">
                       <Home className="mr-2 h-4 w-4" />
                       Home
@@ -202,6 +208,14 @@ export function Navbar() {
                   >
                     <User className="h-4 w-4" />
                     Profile
+                  </Link>
+                  <Link 
+                    href="/my-drafts" 
+                    className="flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-accent rounded"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    <FileText className="h-4 w-4" />
+                    My Drafts
                   </Link>
                   
                   <Link 

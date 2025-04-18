@@ -248,10 +248,12 @@ export const updateUserPrefs = async (prefs: Record<string, unknown>) => {
 export const createPost = async (
     title: string,
     content: string, // Will be JSON stringified
-    post_type: 'standard' | 'blog', // New attribute
     visibility: PostVisibility = 'public',
     groupIds: string[] = [],
-    imageId?: string
+    imageId?: string,
+    status: 'published' | 'draft' = 'published',
+    postType: 'standard' | 'blog' = 'standard',
+    label: 'Work' | 'Philosophy' | 'Art' = 'Work'
 ) => {
     try {
         const currentUser = await getCurrentUser();
@@ -259,29 +261,51 @@ export const createPost = async (
             throw new Error('User not authenticated');
         }
 
-        // Create post data object
-        const postData: Record<string, unknown> = {
-            title,
-            content, // Store the stringified JSON
-            image: imageId || null,
-            created_at: new Date().toISOString(),
-            user_id: currentUser.$id,
-            user_name: currentUser.name,
-            visibility: visibility,
-            post_type: post_type // Save the post type
-        };
-
-        // Only include group_id field if visibility is set to 'groups'
-        if (visibility === 'groups') {
-            postData.group_id = groupIds;
-        }
-
+        const timeNow = new Date().toISOString();
+        
+        // Create post document
         const post = await databases.createDocument(
             DATABASES.MAIN,
             COLLECTIONS.POSTS,
             ID.unique(),
-            postData
+            {
+                title,
+                content,
+                created_at: timeNow,
+                user_id: currentUser.$id,
+                user_name: currentUser.name,
+                image: imageId || null,
+                visibility: visibility,
+                group_id: groupIds,
+                post_type: postType,
+                status: status,
+                label: label
+            }
         );
+        
+        // Update the user's post count
+        const userData = await databases.listDocuments(
+            DATABASES.MAIN,
+            COLLECTIONS.USERS,
+            [
+                Query.equal('userId', currentUser.$id)
+            ]
+        );
+        
+        if (userData.documents.length > 0) {
+            const userDoc = userData.documents[0];
+            const currentPostCount = userDoc.postCount || 0;
+            
+            await databases.updateDocument(
+                DATABASES.MAIN,
+                COLLECTIONS.USERS,
+                userDoc.$id,
+                {
+                    postCount: currentPostCount + 1
+                }
+            );
+        }
+        
         return post;
     } catch (error) {
         console.error("Error creating post:", error);
@@ -289,9 +313,12 @@ export const createPost = async (
     }
 };
 
-export const getPosts = async (limit = 10, options?: { filter?: 'random' | 'popular' | 'latest', userId?: string }) => {
+export const getPosts = async (limit = 10, options?: { filter?: 'random' | 'popular' | 'latest', userId?: string, includeBlogPosts?: boolean }) => {
     try {
-        const queries = [Query.limit(limit)];
+        const queries = [
+            Query.limit(limit),
+            Query.equal('status', 'published')
+        ];
         
         // Default sorting by created_at descending (latest first)
         if (!options?.filter || options.filter === 'latest') {
@@ -301,6 +328,11 @@ export const getPosts = async (limit = 10, options?: { filter?: 'random' | 'popu
         // Filter by specific user if userId is provided
         if (options?.userId) {
             queries.push(Query.equal('user_id', options.userId));
+        }
+        
+        // By default, exclude blog posts unless explicitly requested
+        if (!options?.includeBlogPosts) {
+            queries.push(Query.equal('post_type', 'standard'));
         }
         
         // For random posts, we can use a random sort (simulated by various created_at ranges)
@@ -358,28 +390,23 @@ export const updatePost = async (
         image: string,
         visibility: PostVisibility,
         group_id: string[],
-        post_type: 'standard' | 'blog' // New attribute
+        post_type: 'standard' | 'blog', // New attribute
+        status: 'published' | 'draft', // Add status field
+        label: 'Work' | 'Philosophy' | 'Art' // Label field
     }>
 ) => {
     try {
-        // Create update data object
-        const updateData: Record<string, unknown> = { ...data };
-
-        // If visibility is changing and not set to 'groups', remove group_id field
-        if (updateData.visibility && updateData.visibility !== 'groups') {
-            delete updateData.group_id; // Use delete operator for optional chaining safety
+        const currentUser = await getCurrentUser();
+        if (!currentUser) {
+            throw new Error('User not authenticated');
         }
-
-        // If visibility is set to 'groups' but group_id is empty or not provided, set to empty array
-        if (updateData.visibility === 'groups' && !updateData.group_id) {
-            updateData.group_id = [];
-        }
-
+        
+        // Remove the timestamp since it's not in the schema
         return await databases.updateDocument(
             DATABASES.MAIN,
             COLLECTIONS.POSTS,
             id,
-            updateData
+            data
         );
     } catch (error) {
         console.error("Error updating post:", error);
@@ -544,7 +571,10 @@ export const getPopularAuthors = async (limit = 4) => {
         const posts = await databases.listDocuments(
             DATABASES.MAIN,
             COLLECTIONS.POSTS,
-            [Query.limit(100)] // Get a good sample size
+            [
+                Query.equal('status', 'published'),
+                Query.limit(100) // Get a good sample size
+            ]
         );
 
         // Count posts per author and sort by count, handling potential null values
@@ -626,7 +656,10 @@ export const searchUsers = async (searchTerm: string, limit = 10) => {
         const posts = await databases.listDocuments(
             DATABASES.MAIN,
             COLLECTIONS.POSTS,
-            [Query.limit(100)] // Get a good sample size
+            [
+                Query.equal('status', 'published'),
+                Query.limit(100) // Get a good sample size
+            ]
         );
 
         // Extract unique users from posts
@@ -691,6 +724,7 @@ export const getUserById = async (userId: string): Promise<Record<string, unknow
                 COLLECTIONS.POSTS,
                 [
                     Query.equal('user_id', userId),
+                    Query.equal('status', 'published'),
                     Query.orderDesc('created_at')
                 ]
             );
@@ -718,6 +752,7 @@ export const getUserById = async (userId: string): Promise<Record<string, unknow
                         COLLECTIONS.POSTS,
                         [
                             Query.equal('user_id', userId),
+                            Query.equal('status', 'published'),
                             Query.orderDesc('created_at')
                         ]
                     );
@@ -1123,7 +1158,9 @@ export const getVisiblePosts = async (limit = 10) => {
                 DATABASES.MAIN,
                 COLLECTIONS.POSTS,
                 [
+                    Query.equal('status', 'published'),
                     Query.equal('visibility', 'public'),
+                    Query.equal('post_type', 'standard'), // Only show standard posts, not blog posts
                     Query.orderDesc('created_at'),
                     Query.limit(limit)
                 ]
@@ -1141,11 +1178,14 @@ export const getVisiblePosts = async (limit = 10) => {
         const allPosts = await databases.listDocuments(
             DATABASES.MAIN,
             COLLECTIONS.POSTS,
-            [Query.orderDesc('created_at'), Query.limit(100)] // Get more than we need for filtering
+            [Query.equal('status', 'published'), Query.orderDesc('created_at'), Query.limit(100)] // Get more than we need for filtering
         );
         
         // Filter posts based on visibility permissions
         const visiblePosts = allPosts.documents.filter(post => {
+            // Skip blog posts - they should only appear in user profiles
+            if (post.post_type === 'blog') return false;
+            
             // Public posts are visible to everyone
             if (post.visibility === 'public') return true;
             
@@ -1193,6 +1233,7 @@ export const getPrivatePosts = async (limit = 10) => {
             [
                 Query.equal('user_id', currentUser.$id),
                 Query.equal('visibility', 'private'),
+                Query.equal('status', 'published'),
                 Query.orderDesc('created_at'),
                 Query.limit(limit)
             ]
@@ -1237,6 +1278,7 @@ export const getUserBlogPosts = async (userId: string, limit = 10) => {
         const queries = [
             Query.equal('user_id', userId),
             Query.equal('post_type', 'blog'), // Filter by blog type
+            Query.equal('status', 'published'),
             Query.orderDesc('created_at'),    // Order by latest
             Query.limit(limit)
         ];
@@ -1250,4 +1292,55 @@ export const getUserBlogPosts = async (userId: string, limit = 10) => {
         console.error("Error fetching user blog posts:", error);
         throw error;
     }
-}; 
+};
+
+/**
+ * Update existing posts in the database to set default values for status and post_type
+ * This function sets status='published' and post_type='standard' for posts that have these fields as null
+ * @returns Number of updated posts
+ */
+export const updateExistingPostsWithDefaults = async () => {
+    try {
+        // Fetch all posts that need updating (where status or post_type is null)
+        const postsToUpdate = await databases.listDocuments(
+            DATABASES.MAIN,
+            COLLECTIONS.POSTS,
+            [Query.limit(100)] // Get up to 100 posts at a time
+        );
+        
+        let updatedCount = 0;
+        
+        // Process each post
+        for (const post of postsToUpdate.documents) {
+            const updateData: Record<string, unknown> = {};
+            
+            // Check if status is null and set default
+            if (post.status === null || post.status === undefined) {
+                updateData.status = 'published';
+            }
+            
+            // Check if post_type is null and set default
+            if (post.post_type === null || post.post_type === undefined) {
+                updateData.post_type = 'standard';
+            }
+            
+            // Only update if there are fields that need updating
+            if (Object.keys(updateData).length > 0) {
+                await databases.updateDocument(
+                    DATABASES.MAIN,
+                    COLLECTIONS.POSTS,
+                    post.$id,
+                    updateData
+                );
+                updatedCount++;
+            }
+        }
+        
+        return updatedCount;
+    } catch (error) {
+        console.error("Error updating existing posts:", error);
+        throw error;
+    }
+};
+
+export { Query };

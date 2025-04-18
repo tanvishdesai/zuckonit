@@ -65,7 +65,7 @@ export function TiptapContentRenderer({ content, className = '' }: TiptapContent
         // Handle HTML content
         editor.commands.setContent(content, false);
       }
-    } catch (e) {
+    } catch  {
       // If JSON parsing fails, set as HTML
       if (editor.getHTML() !== content) {
         editor.commands.setContent(content, false);

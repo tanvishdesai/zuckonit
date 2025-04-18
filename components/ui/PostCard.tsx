@@ -6,7 +6,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/componen
 import { Button } from '@/components/ui/button';
 import { formatDistance } from 'date-fns';
 import { getImageUrl } from '@/lib/appwrite';
-import { Lock, Globe, Users } from 'lucide-react';
+import { Lock, Globe, Users, BriefcaseBusiness, BookOpenText, Palette } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { TiptapContentRenderer } from './TiptapContentRenderer';
 
@@ -24,6 +24,7 @@ interface PostCardProps {
   visibility?: 'public' | 'private' | 'groups';
   groupIds?: string[];
   postType?: 'standard' | 'blog';
+  label?: 'Work' | 'Philosophy' | 'Art';
 }
 
 export function PostCard({
@@ -39,7 +40,8 @@ export function PostCard({
   className = '',
   visibility = 'public',
   groupIds = [],
-  postType = 'standard'
+  postType = 'standard',
+  label = 'Work'
 }: PostCardProps) {
   const formattedDate = formatDistance(new Date(createdAt), new Date(), { addSuffix: true });
   
@@ -70,6 +72,32 @@ export function PostCard({
           <Badge variant="outline" className="flex items-center gap-1 bg-emerald-500/10 text-emerald-500 border-emerald-500/20">
             <Globe className="h-3 w-3" />
             <span>Public</span>
+          </Badge>
+        );
+    }
+  };
+  
+  const renderLabelBadge = () => {
+    switch(label) {
+      case 'Philosophy':
+        return (
+          <Badge variant="outline" className="flex items-center gap-1 bg-indigo-500/10 text-indigo-500 border-indigo-500/20">
+            <BookOpenText className="h-3 w-3" />
+            <span>Philosophy</span>
+          </Badge>
+        );
+      case 'Art':
+        return (
+          <Badge variant="outline" className="flex items-center gap-1 bg-purple-500/10 text-purple-500 border-purple-500/20">
+            <Palette className="h-3 w-3" />
+            <span>Art</span>
+          </Badge>
+        );
+      default: // Work
+        return (
+          <Badge variant="outline" className="flex items-center gap-1 bg-blue-500/10 text-blue-500 border-blue-500/20">
+            <BriefcaseBusiness className="h-3 w-3" />
+            <span>Work</span>
           </Badge>
         );
     }
@@ -111,6 +139,12 @@ export function PostCard({
             <span>{formattedDate}</span>
             <span>•</span>
             {renderVisibilityBadge()}
+            {postType === 'standard' && (
+              <>
+                <span>•</span>
+                {renderLabelBadge()}
+              </>
+            )}
           </div>
         </CardHeader>
         <CardContent className="flex-grow p-0 mb-3">
