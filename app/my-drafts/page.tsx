@@ -44,43 +44,19 @@ export default function MyDraftsPage() {
         
         console.log("Client - Fetching drafts for user:", user.$id);
         
-        try {
-          // First try using the API route
-          const response = await fetch('/api/drafts', {
-            credentials: 'include', // This ensures cookies are sent with the request
-          });
-          
-          if (!response.ok) {
-            console.error("Client - API response not ok:", response.status, response.statusText);
-            throw new Error(`API response error: ${response.status} ${response.statusText}`);
-          }
-          
-          const data = await response.json();
-          
-          if (data.error) {
-            console.error("Client - API returned error:", data.error);
-            throw new Error(data.error);
-          } else {
-            console.log("Client - Drafts fetched successfully via API:", data.documents?.length || 0, "drafts");
-            setPosts(data.documents || []);
-          }
-        } catch (apiErr) {
-          console.error("Client - API route failed, trying direct Appwrite query:", apiErr);
-          
-          // Fallback: If API route fails, query Appwrite directly
-          const response = await databases.listDocuments(
-            DATABASES.MAIN,
-            COLLECTIONS.POSTS,
-            [
-              Query.equal('user_id', user.$id),
-              Query.equal('status', 'draft'),
-              Query.orderDesc('created_at')
-            ]
-          );
-          
-          console.log("Client - Drafts fetched successfully via direct query:", response.documents?.length || 0, "drafts");
-          setPosts(response.documents as unknown as Post[]);
-        }
+        // Query Appwrite directly for drafts
+        const response = await databases.listDocuments(
+          DATABASES.MAIN,
+          COLLECTIONS.POSTS,
+          [
+            Query.equal('user_id', user.$id),
+            Query.equal('status', 'draft'),
+            Query.orderDesc('created_at')
+          ]
+        );
+        
+        console.log("Client - Drafts fetched successfully:", response.documents?.length || 0, "drafts");
+        setPosts(response.documents as unknown as Post[]);
       } catch (err) {
         console.error('Client - Error fetching drafts:', err);
         setError('Failed to load your drafts. Please try again later.');

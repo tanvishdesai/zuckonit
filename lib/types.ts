@@ -51,6 +51,7 @@ export interface Post {
     group_ids?: string[]; // IDs of groups if visibility is 'groups'
     created_at: string; // ISO String date
     updated_at: string; // ISO String date
+    status: 'published' | 'draft'; // Post status
     // Add future fields like tags, likes_count, comments_count etc.
 }
 

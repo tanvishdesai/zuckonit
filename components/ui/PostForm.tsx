@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import Link from 'next/link';
 
 interface PostFormProps {
   initialData?: {
@@ -237,11 +238,6 @@ export function PostForm({ initialData, mode = 'create' }: PostFormProps) {
             status: 'draft'
           });
           setLocalMode('edit'); // Switch to edit mode since we now have a saved draft
-          
-          // Update the database to mark as draft
-          await updatePostDB(response.$id, {
-            status: 'draft'
-          });
         }
       } else if (localInitialData?.id) {
         await updatePostDB(localInitialData.id, {
@@ -482,7 +478,16 @@ export function PostForm({ initialData, mode = 'create' }: PostFormProps) {
   return (
     <form onSubmit={(e) => handleSubmit(e, false)} className="space-y-6">
       {error && <div className="bg-destructive/10 text-destructive p-3 rounded-md">{error}</div>}
-      {successMessage && <div className="bg-green-500/10 text-green-700 p-3 rounded-md">{successMessage}</div>}
+      {successMessage && (
+        <div className="bg-green-500/10 text-green-700 p-3 rounded-md flex justify-between items-center">
+          <span>{successMessage}</span>
+          {postStatus === 'draft' && (
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/my-drafts">View My Drafts</Link>
+            </Button>
+          )}
+        </div>
+      )}
       
       <div className="space-y-2">
         <Label htmlFor="title">Post Title</Label>
@@ -635,6 +640,13 @@ export function PostForm({ initialData, mode = 'create' }: PostFormProps) {
         >
           <Save className="h-4 w-4 mr-2" />
           Save
+        </Button>
+        <Button 
+          type="button" 
+          variant="link" 
+          asChild
+        >
+          <Link href="/my-drafts">My Drafts</Link>
         </Button>
       </div>
     </form>

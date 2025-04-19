@@ -21,6 +21,8 @@ interface Post {
   created_at: string;
   user_id: string;
   user_name: string;
+  visibility?: 'public' | 'private' | 'groups';
+  group_id?: string[];
 }
 
 interface Author {
@@ -390,6 +392,8 @@ function renderColumnsLayout(
                   createdAt={post.created_at}
                   imageId={post.image}
                   userName={post.user_name}
+                  visibility={post.visibility}
+                  groupIds={post.group_id}
                   className={`${hoveredPost === post.$id ? 'shadow-xl border-primary' : 'shadow-sm'}`}
                 />
               </div>

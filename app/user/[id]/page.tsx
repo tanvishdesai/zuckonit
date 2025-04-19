@@ -213,6 +213,7 @@ export default function UserProfilePage() {
                   src={profilePictureUrl}
                   alt={user.name}
                   fill
+                  priority
                   className="object-cover"
                   sizes="128px"
                 />

@@ -86,9 +86,7 @@ export const createUserAccount = async (email: string, password: string, name: s
                 email: email,
                 profilePictureId: null,
                 bio: "", // Initialize empty bio field
-                created_at: new Date().toISOString(),
-                postCount: 0 // Initialize post count
-            }
+                created_at: new Date().toISOString()            }
         );
         
         if (newAccount) {
@@ -749,13 +747,25 @@ export const getUserById = async (userId: string): Promise<Record<string, unknow
             };
         } catch (error) {
             console.error("Error fetching user from users collection:", error);
-            // If not found in users collection, try to get from Appwrite accounts
+            
+            // If not found in users collection, try to get from posts collection
             try {
-                const user = await account.get();
+                // Look for any posts by this user to get basic user info
+                const postsQuery = await databases.listDocuments(
+                    DATABASES.MAIN,
+                    COLLECTIONS.POSTS,
+                    [
+                        Query.equal('user_id', userId),
+                        Query.equal('status', 'published'),
+                        Query.orderDesc('created_at'),
+                        Query.limit(1)
+                    ]
+                );
                 
-                if (user.$id === userId) {
-                    // Try to get user's posts
-                    const postsQuery = await databases.listDocuments(
+                if (postsQuery.documents.length > 0) {
+                    const userPost = postsQuery.documents[0];
+                    // Get all posts by this user
+                    const allPostsQuery = await databases.listDocuments(
                         DATABASES.MAIN,
                         COLLECTIONS.POSTS,
                         [
@@ -766,27 +776,56 @@ export const getUserById = async (userId: string): Promise<Record<string, unknow
                     );
                     
                     return {
-                        userId: user.$id,
-                        name: user.name,
-                        email: user.email,
-                        profilePictureId: user.prefs?.profilePictureId || null,
+                        userId: userPost.user_id,
+                        name: userPost.user_name,
+                        profilePictureId: null, // We don't have this from posts
                         bio: null,
-                        created_at: null,
-                        postCount: postsQuery.documents.length || 0,
-                        posts: postsQuery.documents
+                        created_at: userPost.created_at,
+                        postCount: allPostsQuery.documents.length || 0,
+                        posts: allPostsQuery.documents
                     };
                 }
-            } catch (accountError) {
-                console.error("Error fetching user from account:", accountError);
-                // Not found in Appwrite accounts either
-                return null;
+                
+                // If still no data, try to get from Appwrite accounts (only works for current user)
+                try {
+                    const user = await account.get();
+                    
+                    if (user.$id === userId) {
+                        // User found in account but might not have posts
+                        const postsQuery = await databases.listDocuments(
+                            DATABASES.MAIN,
+                            COLLECTIONS.POSTS,
+                            [
+                                Query.equal('user_id', userId),
+                                Query.equal('status', 'published'),
+                                Query.orderDesc('created_at')
+                            ]
+                        );
+                        
+                        return {
+                            userId: user.$id,
+                            name: user.name,
+                            email: user.email,
+                            profilePictureId: user.prefs?.profilePictureId || null,
+                            bio: null,
+                            created_at: null,
+                            postCount: postsQuery.documents.length || 0,
+                            posts: postsQuery.documents
+                        };
+                    }
+                } catch (accountError) {
+                    console.error("Error fetching user from account:", accountError);
+                }
+            } catch (postsError) {
+                console.error("Error fetching user from posts:", postsError);
             }
+            
+            // Not found in any collection
+            return null;
         }
-        
-        return null;
     } catch (error) {
         console.error("Error fetching user:", error);
-        throw error;
+        return null; // Return null instead of throwing
     }
 };
 
