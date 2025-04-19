@@ -18,6 +18,7 @@ interface PostDocument extends Models.Document {
   user_name?: string;
   visibility?: 'public' | 'private' | 'groups';
   group_id?: string[];
+  label?: 'Work' | 'Philosophy' | 'Art' | 'literature' | 'Cinema';
 }
 
 interface PostsState {
@@ -247,6 +248,7 @@ export default function Home() {
                       featured={true}
                       visibility={posts.documents[0].visibility}
                       groupIds={posts.documents[0].group_id}
+                      label={posts.documents[0].label}
                     />
                   </div>
                 </div>
@@ -267,6 +269,7 @@ export default function Home() {
                       userName={post.user_name}
                       visibility={post.visibility}
                       groupIds={post.group_id}
+                      label={post.label}
                     />
                   </div>
                 ))}

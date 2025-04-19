@@ -23,6 +23,7 @@ interface Post {
   user_name: string;
   visibility?: 'public' | 'private' | 'groups';
   group_id?: string[];
+  label?: 'Work' | 'Philosophy' | 'Art' | 'literature' | 'Cinema';
 }
 
 interface Author {
@@ -395,6 +396,7 @@ function renderColumnsLayout(
                   visibility={post.visibility}
                   groupIds={post.group_id}
                   className={`${hoveredPost === post.$id ? 'shadow-xl border-primary' : 'shadow-sm'}`}
+                  label={post.label}
                 />
               </div>
             ))}

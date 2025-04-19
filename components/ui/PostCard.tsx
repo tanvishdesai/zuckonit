@@ -6,7 +6,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/componen
 import { Button } from '@/components/ui/button';
 import { formatDistance } from 'date-fns';
 import { getImageUrl } from '@/lib/appwrite';
-import { Lock, Globe, Users, BriefcaseBusiness, BookOpenText, Palette } from 'lucide-react';
+import { Lock, Globe, Users, BriefcaseBusiness, BookOpenText, Palette, BookOpen, Film } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { TiptapContentRenderer } from './TiptapContentRenderer';
 
@@ -24,7 +24,7 @@ interface PostCardProps {
   visibility?: 'public' | 'private' | 'groups';
   groupIds?: string[];
   postType?: 'standard' | 'blog';
-  label?: 'Work' | 'Philosophy' | 'Art';
+  label?: 'Work' | 'Philosophy' | 'Art' | 'literature' | 'Cinema';
 }
 
 export function PostCard({
@@ -91,6 +91,20 @@ export function PostCard({
           <Badge variant="outline" className="flex items-center gap-1 bg-purple-500/10 text-purple-500 border-purple-500/20">
             <Palette className="h-3 w-3" />
             <span>Art</span>
+          </Badge>
+        );
+      case 'literature':
+        return (
+          <Badge variant="outline" className="flex items-center gap-1 bg-amber-500/10 text-amber-500 border-amber-500/20">
+            <BookOpen className="h-3 w-3" />
+            <span>Literature</span>
+          </Badge>
+        );
+      case 'Cinema':
+        return (
+          <Badge variant="outline" className="flex items-center gap-1 bg-red-500/10 text-red-500 border-red-500/20">
+            <Film className="h-3 w-3" />
+            <span>Cinema</span>
           </Badge>
         );
       default: // Work

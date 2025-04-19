@@ -46,15 +46,7 @@ export default function RootLayout({
                       <p className="text-sm text-muted-foreground">A minimalist platform for sharing your thoughts, ideas, and creative work.</p>
                     </div>
                     
-                    <div className="space-y-3">
-                      <h4 className="font-medium text-sm">Platform</h4>
-                      <ul className="space-y-2 text-sm">
-                        <li><Link href="/" className="text-muted-foreground hover:text-foreground transition-colors">Home</Link></li>
-                        <li><Link href="#" className="text-muted-foreground hover:text-foreground transition-colors">About</Link></li>
-                        <li><Link href="#" className="text-muted-foreground hover:text-foreground transition-colors">Terms</Link></li>
-                        <li><Link href="#" className="text-muted-foreground hover:text-foreground transition-colors">Privacy</Link></li>
-                      </ul>
-                    </div>
+                   
                     
                     <div className="space-y-3">
                       <h4 className="font-medium text-sm">Get Started</h4>
@@ -68,13 +60,12 @@ export default function RootLayout({
                     <div className="space-y-3">
                       <h4 className="font-medium text-sm">Contact</h4>
                       <ul className="space-y-2 text-sm">
-                        <li className="text-muted-foreground">support@zuckonit.com</li>
-                        <li className="text-muted-foreground">+1 (555) 123-4567</li>
+                        <li className="text-muted-foreground">tanvishdesai.05@gmail.com</li>
+                        <li className="text-muted-foreground">+91 901 650 5667</li>
                       </ul>
                       <div className="flex space-x-4 pt-2">
-                        <a href="#" className="text-muted-foreground hover:text-foreground transition-colors">X</a>
-                        <a href="#" className="text-muted-foreground hover:text-foreground transition-colors">Instagram</a>
-                        <a href="#" className="text-muted-foreground hover:text-foreground transition-colors">GitHub</a>
+                        <a href="https://www.instagram.com/tanvish.desai" className="text-muted-foreground hover:text-foreground transition-colors">Instagram</a>
+                        <a href="https://github.com/tanvishdesai" className="text-muted-foreground hover:text-foreground transition-colors">GitHub</a>
                       </div>
                     </div>
                   </div>

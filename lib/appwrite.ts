@@ -252,7 +252,7 @@ export const createPost = async (
     imageId?: string,
     status: 'published' | 'draft' = 'published',
     postType: 'standard' | 'blog' = 'standard',
-    label: 'Work' | 'Philosophy' | 'Art' = 'Work'
+    label: 'Work' | 'Philosophy' | 'Art' | 'literature' | 'Cinema' = 'Work'
 ) => {
     try {
         const currentUser = await getCurrentUser();
@@ -398,7 +398,7 @@ export const updatePost = async (
         group_id: string[],
         post_type: 'standard' | 'blog', // New attribute
         status: 'published' | 'draft', // Add status field
-        label: 'Work' | 'Philosophy' | 'Art' // Label field
+        label: 'Work' | 'Philosophy' | 'Art' | 'literature' | 'Cinema' // Label field
     }>
 ) => {
     try {

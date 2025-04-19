@@ -24,7 +24,7 @@ interface Post {
   visibility?: 'public' | 'private' | 'groups';
   group_id?: string[];
   post_type?: 'standard' | 'blog';
-  label?: 'Work' | 'Philosophy' | 'Art';
+  label?: 'Work' | 'Philosophy' | 'Art' | 'literature' | 'Cinema';
 }
 
 // Define UserProfile interface

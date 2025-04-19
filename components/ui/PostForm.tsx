@@ -29,7 +29,7 @@ interface PostFormProps {
     group_id?: string[];
     post_type?: 'standard' | 'blog';
     status?: 'published' | 'draft';
-    label?: 'Work' | 'Philosophy' | 'Art';
+    label?: 'Work' | 'Philosophy' | 'Art' | 'literature' | 'Cinema';
   };
   mode: 'create' | 'edit';
 }
@@ -46,7 +46,7 @@ export function PostForm({ initialData, mode = 'create' }: PostFormProps) {
   const [selectedGroups, setSelectedGroups] = useState<string[]>(initialData?.group_id || []);
   const [postType, setPostType] = useState<'standard' | 'blog'>(initialData?.post_type || 'standard');
   const [postStatus, setPostStatus] = useState<'published' | 'draft'>(initialData?.status || 'published');
-  const [postLabel, setPostLabel] = useState<'Work' | 'Philosophy' | 'Art'>(initialData?.label || 'Work');
+  const [postLabel, setPostLabel] = useState<'Work' | 'Philosophy' | 'Art' | 'literature' | 'Cinema'>(initialData?.label || 'Work');
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
@@ -594,7 +594,7 @@ export function PostForm({ initialData, mode = 'create' }: PostFormProps) {
           <Label htmlFor="post-label">Post Label</Label>
           <RadioGroup
             value={postLabel}
-            onValueChange={(value: 'Work' | 'Philosophy' | 'Art') => {
+            onValueChange={(value: 'Work' | 'Philosophy' | 'Art' | 'literature' | 'Cinema') => {
               setPostLabel(value);
               setHasChanges(true);
             }}
@@ -611,6 +611,14 @@ export function PostForm({ initialData, mode = 'create' }: PostFormProps) {
             <div className="flex items-center space-x-2">
               <RadioGroupItem value="Art" id="label-art" />
               <Label htmlFor="label-art">Art</Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <RadioGroupItem value="literature" id="label-literature" />
+              <Label htmlFor="label-literature">Literature</Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <RadioGroupItem value="Cinema" id="label-cinema" />
+              <Label htmlFor="label-cinema">Cinema</Label>
             </div>
           </RadioGroup>
         </div>
