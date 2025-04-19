@@ -86,7 +86,8 @@ export const createUserAccount = async (email: string, password: string, name: s
                 email: email,
                 profilePictureId: null,
                 bio: "", // Initialize empty bio field
-                created_at: new Date().toISOString()
+                created_at: new Date().toISOString(),
+                postCount: 0 // Initialize post count
             }
         );
         
@@ -283,27 +284,34 @@ export const createPost = async (
             }
         );
         
-        // Update the user's post count
-        const userData = await databases.listDocuments(
-            DATABASES.MAIN,
-            COLLECTIONS.USERS,
-            [
-                Query.equal('userId', currentUser.$id)
-            ]
-        );
-        
-        if (userData.documents.length > 0) {
-            const userDoc = userData.documents[0];
-            const currentPostCount = userDoc.postCount || 0;
-            
-            await databases.updateDocument(
+        // Try to update the user's post count - but don't let it prevent post creation if it fails
+        try {
+            const userData = await databases.listDocuments(
                 DATABASES.MAIN,
                 COLLECTIONS.USERS,
-                userDoc.$id,
-                {
-                    postCount: currentPostCount + 1
-                }
+                [
+                    Query.equal('userId', currentUser.$id)
+                ]
             );
+            
+            if (userData.documents.length > 0) {
+                const userDoc = userData.documents[0];
+                const currentPostCount = userDoc.postCount || 0;
+                
+                await databases.updateDocument(
+                    DATABASES.MAIN,
+                    COLLECTIONS.USERS,
+                    userDoc.$id,
+                    {
+                        postCount: currentPostCount + 1
+                    }
+                );
+            }
+        } catch (updateError) {
+            // If updating postCount fails, log the error but continue
+            // This likely means the postCount field doesn't exist in the schema
+            console.warn("Could not update user postCount:", updateError);
+            // The post was still created successfully, so we'll return it
         }
         
         return post;
