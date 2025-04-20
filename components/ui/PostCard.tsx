@@ -5,10 +5,14 @@ import Image from 'next/image';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { formatDistance } from 'date-fns';
-import { getImageUrl } from '@/lib/appwrite';
-import { Lock, Globe, Users, BriefcaseBusiness, BookOpenText, Palette, BookOpen, Film } from 'lucide-react';
+import { getImageUrl, bookmarkPost, removeBookmark, isPostBookmarked } from '@/lib/appwrite';
+import { Lock, Globe, Users, BriefcaseBusiness, BookOpenText, Palette, BookOpen, Film, Bookmark } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { TiptapContentRenderer } from './TiptapContentRenderer';
+import { useAuth } from '@/context/AuthContext';
+import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 interface PostCardProps {
   id: string;
@@ -43,7 +47,56 @@ export function PostCard({
   postType = 'standard',
   label = 'Work'
 }: PostCardProps) {
+  const { user } = useAuth();
+  const [isBookmarked, setIsBookmarked] = useState(false);
+  const [isBookmarkLoading, setIsBookmarkLoading] = useState(false);
+  
   const formattedDate = formatDistance(new Date(createdAt), new Date(), { addSuffix: true });
+  
+  // Check if post is bookmarked when component loads
+  useEffect(() => {
+    const checkBookmarkStatus = async () => {
+      if (!user) return;
+      
+      try {
+        const bookmarked = await isPostBookmarked(id);
+        setIsBookmarked(bookmarked);
+      } catch (error) {
+        console.error("Error checking bookmark status:", error);
+      }
+    };
+    
+    checkBookmarkStatus();
+  }, [id, user]);
+  
+  const handleBookmarkToggle = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (!user) {
+      toast.error("Please sign in to bookmark posts");
+      return;
+    }
+    
+    try {
+      setIsBookmarkLoading(true);
+      
+      if (isBookmarked) {
+        await removeBookmark(id);
+        setIsBookmarked(false);
+        toast.success("Post removed from bookmarks");
+      } else {
+        await bookmarkPost(id);
+        setIsBookmarked(true);
+        toast.success("Post added to bookmarks");
+      }
+    } catch (error) {
+      console.error("Error toggling bookmark:", error);
+      toast.error("Failed to update bookmark");
+    } finally {
+      setIsBookmarkLoading(false);
+    }
+  };
   
   const handleDelete = () => {
     if (onDelete) {
@@ -124,6 +177,27 @@ export function PostCard({
       h-full transition-all hover:shadow-lg flex flex-col
       ${className}
     `}>
+      {/* Bookmark button that appears on hover */}
+      <div className="absolute top-3 right-3 z-20">
+        <Button
+          size="icon"
+          variant="ghost"
+          className={cn(
+            "h-8 w-8 rounded-full bg-background/50 backdrop-blur-md hover:bg-background/70 transition-colors",
+            isBookmarked && "text-primary hover:text-primary"
+          )}
+          onClick={handleBookmarkToggle}
+          disabled={isBookmarkLoading}
+        >
+          <Bookmark 
+            className={cn(
+              "h-4 w-4 transition-transform hover:scale-110",
+              isBookmarked && "fill-primary"
+            )} 
+          />
+        </Button>
+      </div>
+      
       {imageId && (
         <div className={`relative ${featured ? 'h-64 md:h-auto' : 'h-48'} w-full`}>
           <Image

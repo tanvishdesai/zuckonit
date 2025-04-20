@@ -11,6 +11,7 @@ const APPWRITE_PROFILE_PICTURES_BUCKET_ID = process.env.NEXT_PUBLIC_APPWRITE_PRO
 const APPWRITE_USERS_ID = process.env.NEXT_PUBLIC_APPWRITE_USERS_ID || 'users';
 const APPWRITE_GROUPS_ID = process.env.NEXT_PUBLIC_APPWRITE_GROUPS_ID || 'groups';
 const APPWRITE_GROUP_MEMBERS_ID = process.env.NEXT_PUBLIC_APPWRITE_GROUP_MEMBERS_ID || 'group_members';
+const APPWRITE_BOOKMARKS_ID = process.env.NEXT_PUBLIC_APPWRITE_BOOKMARKS_ID || 'bookmarks';
 
 // Initialize Appwrite Client
 const client = new Client()
@@ -32,7 +33,8 @@ export const COLLECTIONS = {
     COMMENTS: APPWRITE_COMMENTS_COLLECTION_ID,
     USERS: APPWRITE_USERS_ID, // New collection for users
     GROUPS: APPWRITE_GROUPS_ID, // Collection for user groups
-    GROUP_MEMBERS: APPWRITE_GROUP_MEMBERS_ID // Collection for group members
+    GROUP_MEMBERS: APPWRITE_GROUP_MEMBERS_ID, // Collection for group members
+    BOOKMARKS: APPWRITE_BOOKMARKS_ID // Collection for bookmarks
 };
 
 export const BUCKETS = {
@@ -1387,6 +1389,179 @@ export const updateExistingPostsWithDefaults = async () => {
     } catch (error) {
         console.error("Error updating existing posts:", error);
         throw error;
+    }
+};
+
+/**
+ * Bookmark a post for the current user
+ * @param postId The ID of the post to bookmark
+ * @returns The created bookmark document
+ */
+export const bookmarkPost = async (postId: string) => {
+    try {
+        const currentUser = await getCurrentUser();
+        if (!currentUser) {
+            throw new Error('User not authenticated');
+        }
+
+
+        // Check if bookmark already exists
+        const existingBookmarks = await databases.listDocuments(
+            DATABASES.MAIN,
+            COLLECTIONS.BOOKMARKS,
+            [
+                Query.equal('user_id', currentUser.$id),
+                Query.equal('post_id', postId)
+            ]
+        );
+
+        if (existingBookmarks.total > 0) {
+            // Bookmark already exists, return it
+            return existingBookmarks.documents[0];
+        }
+
+        // Create new bookmark - store only the post ID
+        const bookmark = await databases.createDocument(
+            DATABASES.MAIN,
+            COLLECTIONS.BOOKMARKS,
+            ID.unique(),
+            {
+                user_id: currentUser.$id,
+                post_id: postId,
+                created_at: new Date().toISOString()
+            }
+        );
+
+        return bookmark;
+    } catch (error) {
+        console.error("Error bookmarking post:", error);
+        throw error;
+    }
+};
+
+/**
+ * Remove a bookmark for the current user
+ * @param postId The ID of the post to remove from bookmarks
+ * @returns Boolean indicating if the operation was successful
+ */
+export const removeBookmark = async (postId: string) => {
+    try {
+        const currentUser = await getCurrentUser();
+        if (!currentUser) {
+            throw new Error('User not authenticated');
+        }
+
+        // Find the bookmark document
+        const bookmarks = await databases.listDocuments(
+            DATABASES.MAIN,
+            COLLECTIONS.BOOKMARKS,
+            [
+                Query.equal('user_id', currentUser.$id),
+                Query.equal('post_id', postId)
+            ]
+        );
+
+        if (bookmarks.total === 0) {
+            // No bookmark found
+            return false;
+        }
+
+        // Delete the bookmark
+        await databases.deleteDocument(
+            DATABASES.MAIN,
+            COLLECTIONS.BOOKMARKS,
+            bookmarks.documents[0].$id
+        );
+
+        return true;
+    } catch (error) {
+        console.error("Error removing bookmark:", error);
+        throw error;
+    }
+};
+
+/**
+ * Get all bookmarks for the current user
+ * @returns List of bookmark documents with the related post data
+ */
+export const getUserBookmarks = async () => {
+    try {
+        const currentUser = await getCurrentUser();
+        if (!currentUser) {
+            throw new Error('User not authenticated');
+        }
+
+        // Get all bookmarks for this user
+        const bookmarks = await databases.listDocuments(
+            DATABASES.MAIN,
+            COLLECTIONS.BOOKMARKS,
+            [
+                Query.equal('user_id', currentUser.$id),
+                Query.orderDesc('created_at')
+            ]
+        );
+
+        // Fetch the post for each bookmark
+        if (bookmarks.total > 0) {
+            const bookmarksWithPosts = await Promise.all(
+                bookmarks.documents.map(async (bookmark) => {
+                    try {
+                        const post = await databases.getDocument(
+                            DATABASES.MAIN,
+                            COLLECTIONS.POSTS,
+                            bookmark.post_id
+                        );
+                        
+                        return {
+                            ...bookmark,
+                            post: post
+                        };
+                    } catch (error) {
+                        console.error(`Error fetching post for bookmark ${bookmark.$id}:`, error);
+                        // Return the bookmark without the post data if post not found
+                        return bookmark;
+                    }
+                })
+            );
+            
+            return {
+                ...bookmarks,
+                documents: bookmarksWithPosts
+            };
+        }
+
+        return bookmarks;
+    } catch (error) {
+        console.error("Error fetching user bookmarks:", error);
+        throw error;
+    }
+};
+
+/**
+ * Check if a post is bookmarked by the current user
+ * @param postId The post ID to check
+ * @returns Boolean indicating if the post is bookmarked
+ */
+export const isPostBookmarked = async (postId: string) => {
+    try {
+        const currentUser = await getCurrentUser();
+        if (!currentUser) {
+            return false;
+        }
+
+        const bookmarks = await databases.listDocuments(
+            DATABASES.MAIN,
+            COLLECTIONS.BOOKMARKS,
+            [
+                Query.equal('user_id', currentUser.$id),
+                Query.equal('post_id', postId)
+            ]
+        );
+
+        return bookmarks.total > 0;
+    } catch (error) {
+        console.error("Error checking bookmark status:", error);
+        return false;
     }
 };
 
