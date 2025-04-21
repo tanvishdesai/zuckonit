@@ -833,7 +833,8 @@ function renderColumnsLayout(
   );
 }
 
-export function extractTextFromTiptap(content: string, lines: number = 5): string {
+// Local helper function, not exported
+function extractTextFromTiptap(content: string, lines: number = 5): string {
   try {
     const json = typeof content === 'string' ? JSON.parse(content) : content;
     let text = '';

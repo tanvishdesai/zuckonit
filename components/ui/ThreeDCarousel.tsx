@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { extractTextFromTiptap } from '@/app/explore/page';
+import { extractTextFromTiptap } from '../../lib/utils';
 
 interface Post {
   $id: string;
