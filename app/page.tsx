@@ -47,7 +47,6 @@ export default function Home() {
   
   // Refs for animations
   const heroRef = useRef<HTMLDivElement>(null);
-  const parallaxContainers = useRef<HTMLElement[]>([]);
   const isMobileRef = useRef(false);
 
   // New state for particle animation
@@ -123,105 +122,6 @@ export default function Home() {
     fetchBookmarks();
   }, [user]);
 
-  // 3D hero animation
-  useEffect(() => {
-    if (!heroRef.current || isMobileRef.current) return;
-    
-    const hero = heroRef.current;
-    
-    const handleMouseMove = (e: MouseEvent) => {
-      if (isMobileRef.current) return;
-      
-      const { left, top, width, height } = hero.getBoundingClientRect();
-      const x = (e.clientX - left) / width - 0.5;
-      const y = (e.clientY - top) / height - 0.5;
-      
-      hero.style.transform = `
-        perspective(1000px)
-        rotateX(${y * -8}deg)
-        rotateY(${x * 8}deg)
-        translateZ(20px)
-      `;
-      
-      // Move gradient
-      hero.style.backgroundPosition = `${x * 100 + 50}% ${y * 100 + 50}%`;
-    };
-    
-    const handleMouseLeave = () => {
-      hero.style.transform = `
-        perspective(1000px)
-        rotateX(0deg)
-        rotateY(0deg)
-        translateZ(0)
-      `;
-      hero.style.backgroundPosition = '50% 50%';
-    };
-    
-    document.addEventListener('mousemove', handleMouseMove);
-    hero.addEventListener('mouseleave', handleMouseLeave);
-    
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      hero.removeEventListener('mouseleave', handleMouseLeave);
-    };
-  }, []);
-  
-  // Parallax effect for post cards
-  useEffect(() => {
-    // Add parallax effect to containers
-    const containers = document.querySelectorAll<HTMLElement>('.parallax-container');
-    parallaxContainers.current = Array.from(containers);
-    
-    const handleMouseMove = (e: MouseEvent) => {
-      if (isMobileRef.current) return;
-      
-      requestAnimationFrame(() => {
-        parallaxContainers.current.forEach(container => {
-          const rect = container.getBoundingClientRect();
-          
-          // Check if mouse is hovering over this container
-          if (
-            e.clientX >= rect.left &&
-            e.clientX <= rect.right &&
-            e.clientY >= rect.top &&
-            e.clientY <= rect.bottom
-          ) {
-            // Calculate relative position within the element
-            const relX = (e.clientX - rect.left) / rect.width - 0.5;
-            const relY = (e.clientY - rect.top) / rect.height - 0.5;
-            
-            // Apply subtle transform
-            container.style.transform = `perspective(1000px) rotateY(${relX * 4}deg) rotateX(${-relY * 4}deg) scale(1.02)`;
-          }
-        });
-      });
-    };
-    
-    // Add individual container mouse enter/leave handlers
-    parallaxContainers.current.forEach(container => {
-      container.addEventListener('mouseenter', () => {
-        container.style.transition = 'transform 0.2s ease-out';
-      });
-      
-      container.addEventListener('mouseleave', () => {
-        container.style.transition = 'transform 0.5s ease-out';
-        container.style.transform = 'perspective(1000px) rotateY(0deg) rotateX(0deg) scale(1)';
-      });
-    });
-    
-    document.addEventListener('mousemove', handleMouseMove);
-    
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      
-      // Clean up individual container listeners
-      parallaxContainers.current.forEach(container => {
-        container.removeEventListener('mouseenter', () => {});
-        container.removeEventListener('mouseleave', () => {});
-      });
-    };
-  }, [posts, savedPosts]);
-  
   // Create particles for the hero background
   useEffect(() => {
     const count = isMobileRef.current ? 15 : 30;
@@ -287,7 +187,7 @@ export default function Home() {
         cancelAnimationFrame(animationId);
       }
     };
-  }, [particles]);
+  }, [particles, words.length]);
   
   const toggleFilter = (filter: string) => {
     setActiveFilters(current => 
@@ -385,7 +285,7 @@ export default function Home() {
 
   return (
     <div className="pb-16">
-      {/* Enhanced Hero Section with 3D Effect */}
+      {/* Enhanced Hero Section with Fluid Simulation */}
       <div 
         ref={heroRef}
         className="relative min-h-[90vh] flex items-center justify-center mb-24 bg-gradient-to-br from-[var(--gradient-start)] via-background to-[var(--gradient-end)] overflow-hidden"
@@ -395,6 +295,8 @@ export default function Home() {
           transition: 'transform 0.3s ease, background-position 0.5s ease',
         }}
       >
+        {/* Removed fluid simulation canvas */}
+        
         {/* Particle animation container */}
         <div ref={particlesRef} className="absolute inset-0 overflow-hidden pointer-events-none">
           {particles.map((particle, i) => (
@@ -416,12 +318,12 @@ export default function Home() {
         </div>
         
         {/* Decorative elements */}
-        <div className="absolute top-1/4 -left-12 w-64 h-64 bg-gradient-to-r from-[var(--gradient-start)] to-transparent rounded-full filter blur-3xl opacity-20"></div>
-        <div className="absolute bottom-1/3 -right-12 w-80 h-80 bg-gradient-to-l from-[var(--gradient-end)] to-transparent rounded-full filter blur-3xl opacity-20"></div>
-        <div className="absolute top-[60%] right-[20%] w-40 h-40 bg-gradient-to-tr from-[var(--gradient-start)] to-transparent rounded-full filter blur-2xl opacity-10"></div>
+        <div className="absolute top-1/4 -left-12 w-64 h-64 bg-gradient-to-r from-[var(--gradient-start)] to-transparent rounded-full filter blur-3xl opacity-20 z-0"></div>
+        <div className="absolute bottom-1/3 -right-12 w-80 h-80 bg-gradient-to-l from-[var(--gradient-end)] to-transparent rounded-full filter blur-3xl opacity-20 z-0"></div>
+        <div className="absolute top-[60%] right-[20%] w-40 h-40 bg-gradient-to-tr from-[var(--gradient-start)] to-transparent rounded-full filter blur-2xl opacity-10 z-0"></div>
         
         {/* Abstract decorative SVG */}
-        <div className="absolute inset-0 pointer-events-none opacity-10">
+        <div className="absolute inset-0 pointer-events-none opacity-10 z-0">
           <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
             <defs>
               <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -436,7 +338,7 @@ export default function Home() {
         
         {/* Floating shapes */}
         <motion.div 
-          className="absolute top-[15%] left-[10%] w-20 h-20 border-2 border-primary/20 rounded-lg rotate-12 opacity-70"
+          className="absolute top-[15%] left-[10%] w-20 h-20 border-2 border-primary/20 rounded-lg rotate-12 opacity-70 z-[2]"
           animate={{ 
             y: [0, -15, 0], 
             rotate: [12, 5, 12],
@@ -450,7 +352,7 @@ export default function Home() {
         />
         
         <motion.div 
-          className="absolute bottom-[20%] right-[15%] w-24 h-24 border-2 border-[var(--gradient-end)]/20 rounded-full opacity-70"
+          className="absolute bottom-[20%] right-[15%] w-24 h-24 border-2 border-[var(--gradient-end)]/20 rounded-full opacity-70 z-[2]"
           animate={{ 
             y: [0, 20, 0], 
             x: [0, -10, 0],
@@ -466,7 +368,7 @@ export default function Home() {
         />
         
         <motion.div 
-          className="absolute top-[60%] left-[20%] w-12 h-12 border-2 border-[var(--gradient-start)]/20 rounded-md rotate-45 opacity-70"
+          className="absolute top-[60%] left-[20%] w-12 h-12 border-2 border-[var(--gradient-start)]/20 rounded-md rotate-45 opacity-70 z-[2]"
           animate={{ 
             y: [0, 15, 0], 
             rotate: [45, 30, 45],
@@ -482,7 +384,7 @@ export default function Home() {
         
         {/* Animated accent icons */}
         <motion.div 
-          className="absolute top-[30%] right-[30%] text-primary/30"
+          className="absolute top-[30%] right-[30%] text-primary/30 z-[2]"
           animate={{ 
             y: [0, -10, 0], 
             opacity: [0.3, 0.5, 0.3],
@@ -498,7 +400,7 @@ export default function Home() {
         </motion.div>
         
         <motion.div 
-          className="absolute bottom-[40%] left-[25%] text-[var(--gradient-end)]/30"
+          className="absolute bottom-[40%] left-[25%] text-[var(--gradient-end)]/30 z-[2]"
           animate={{ 
             y: [0, 10, 0], 
             opacity: [0.3, 0.6, 0.3],
@@ -515,7 +417,7 @@ export default function Home() {
         </motion.div>
         
         <motion.div 
-          className="absolute top-[50%] right-[15%] text-[var(--gradient-start)]/30"
+          className="absolute top-[50%] right-[15%] text-[var(--gradient-start)]/30 z-[2]"
           animate={{ 
             y: [0, 15, 0], 
             opacity: [0.3, 0.5, 0.3],
@@ -532,7 +434,7 @@ export default function Home() {
         </motion.div>
         
         {/* Noise texture */}
-        <div className="absolute inset-0 bg-noise opacity-5"></div>
+        <div className="absolute inset-0 bg-noise opacity-5 z-[1]"></div>
         
         <div className="container relative z-10 text-center px-4 py-24 max-w-4xl mx-auto transition-all duration-500">
           {/* Animated title with highlighting */}
@@ -565,7 +467,7 @@ export default function Home() {
           />
           
           <motion.p 
-            className="mt-8 text-xl md:text-2xl font-light text-foreground/80 leading-relaxed max-w-2xl mx-auto"
+            className="mt-8 text-xl md:text-2xl font-light text-foreground/80 leading-relaxed max-w-2xl mx-auto drop-shadow-sm"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.5 }}
@@ -781,31 +683,6 @@ export default function Home() {
                     
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                       <div className="bg-card rounded-2xl overflow-hidden shadow-lg border border-border/40 hover:shadow-xl transition-all duration-300 group parallax-container">
-                        <div className="absolute top-3 right-3 z-20">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className={cn(
-                              "h-8 w-8 rounded-full bg-background/50 backdrop-blur-md hover:bg-background/70 transition-colors",
-                              bookmarkedPosts.includes(filteredPosts[0]?.$id || '') && "text-primary hover:text-primary"
-                            )}
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              if (filteredPosts[0]?.$id) {
-                                handleBookmark(filteredPosts[0].$id);
-                              }
-                            }}
-                          >
-                            <Bookmark 
-                              className={cn(
-                                "h-4 w-4 transition-transform hover:scale-110",
-                                filteredPosts[0]?.$id && bookmarkedPosts.includes(filteredPosts[0].$id) && "fill-primary"
-                              )} 
-                            />
-                          </Button>
-                        </div>
-                        
                         <PostCard
                           key={filteredPosts[0]?.$id}
                           id={filteredPosts[0]?.$id || ''}
@@ -818,36 +695,13 @@ export default function Home() {
                           visibility={filteredPosts[0]?.visibility}
                           groupIds={filteredPosts[0]?.group_id}
                           label={filteredPosts[0]?.label}
+                          onBookmark={() => filteredPosts[0]?.$id && handleBookmark(filteredPosts[0].$id)}
+                          isBookmarked={filteredPosts[0]?.$id ? bookmarkedPosts.includes(filteredPosts[0].$id) : false}
                         />
                       </div>
                       
                       {filteredPosts.length > 1 && (
                         <div className="bg-card rounded-2xl overflow-hidden shadow-lg border border-border/40 hover:shadow-xl transition-all duration-300 group parallax-container">
-                          <div className="absolute top-3 right-3 z-20">
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className={cn(
-                                "h-8 w-8 rounded-full bg-background/50 backdrop-blur-md hover:bg-background/70 transition-colors",
-                                bookmarkedPosts.includes(filteredPosts[1]?.$id || '') && "text-primary hover:text-primary"
-                              )}
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                if (filteredPosts[1]?.$id) {
-                                  handleBookmark(filteredPosts[1].$id);
-                                }
-                              }}
-                            >
-                              <Bookmark 
-                                className={cn(
-                                  "h-4 w-4 transition-transform hover:scale-110",
-                                  filteredPosts[1]?.$id && bookmarkedPosts.includes(filteredPosts[1].$id) && "fill-primary"
-                                )} 
-                              />
-                            </Button>
-                          </div>
-                          
                           <PostCard
                             key={filteredPosts[1]?.$id}
                             id={filteredPosts[1]?.$id || ''}
@@ -860,6 +714,8 @@ export default function Home() {
                             visibility={filteredPosts[1]?.visibility}
                             groupIds={filteredPosts[1]?.group_id}
                             label={filteredPosts[1]?.label}
+                            onBookmark={() => filteredPosts[1]?.$id && handleBookmark(filteredPosts[1].$id)}
+                            isBookmarked={filteredPosts[1]?.$id ? bookmarkedPosts.includes(filteredPosts[1].$id) : false}
                           />
                         </div>
                       )}
@@ -889,29 +745,6 @@ export default function Home() {
                           transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
                         }}
                       >
-                        <div className="absolute top-3 right-3 z-20">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className={cn(
-                              "h-8 w-8 rounded-full bg-background/50 backdrop-blur-md hover:bg-background/70 transition-colors",
-                              bookmarkedPosts.includes(post.$id) && "text-primary hover:text-primary"
-                            )}
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              handleBookmark(post.$id);
-                            }}
-                          >
-                            <Bookmark 
-                              className={cn(
-                                "h-4 w-4 transition-transform hover:scale-110",
-                                bookmarkedPosts.includes(post.$id) && "fill-primary"
-                              )} 
-                            />
-                          </Button>
-                        </div>
-                        
                         <PostCard
                           id={post.$id}
                           title={post.title}
@@ -922,6 +755,8 @@ export default function Home() {
                           visibility={post.visibility}
                           groupIds={post.group_id}
                           label={post.label}
+                          onBookmark={() => handleBookmark(post.$id)}
+                          isBookmarked={bookmarkedPosts.includes(post.$id)}
                         />
                       </div>
                     ))}
@@ -1017,23 +852,6 @@ export default function Home() {
                         transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
                       }}
                     >
-                      <div className="absolute top-3 right-3 z-20">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-8 w-8 rounded-full bg-background/50 backdrop-blur-md hover:bg-background/70 transition-colors text-primary hover:text-primary"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            handleBookmark(post.$id);
-                          }}
-                        >
-                          <Bookmark 
-                            className="h-4 w-4 transition-transform hover:scale-110 fill-primary" 
-                          />
-                        </Button>
-                      </div>
-                      
                       <PostCard
                         id={post.$id}
                         title={post.title}
@@ -1044,6 +862,8 @@ export default function Home() {
                         visibility={post.visibility}
                         groupIds={post.group_id}
                         label={post.label}
+                        onBookmark={() => handleBookmark(post.$id)}
+                        isBookmarked={true}
                       />
                     </div>
                   ))}

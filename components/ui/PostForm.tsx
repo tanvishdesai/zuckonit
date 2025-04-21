@@ -102,6 +102,73 @@ export function PostForm({ initialData, mode = 'create' }: PostFormProps) {
     loadGroups();
   }, []);
 
+  // Define savePostAsDraft before useEffect
+  const savePostAsDraft = async () => {
+    if (!editor || !title.trim()) return;
+    
+    const contentJson = editor.getJSON();
+    
+    try {
+      setIsSaving(true);
+      
+      let coverImageId = localInitialData?.imageId;
+
+      if (coverImageFile) {
+        const uploadedCoverImage = await uploadImage(coverImageFile);
+        coverImageId = uploadedCoverImage.id;
+      }
+
+      const postData = {
+        title: title,
+        content: JSON.stringify(contentJson),
+        visibility: visibility,
+        group_id: visibility === 'groups' ? selectedGroups : [],
+        post_type: postType,
+        image: coverImageId,
+        label: postLabel
+      };
+
+      if (localMode === 'create') {
+        const response = await createPostDB(
+          postData.title,
+          postData.content,
+          postData.visibility,
+          postData.group_id,
+          postData.image,
+          'draft',
+          postData.post_type,
+          postData.label
+        );
+        
+        // Update initialData with the new post id
+        if (response?.$id) {
+          setLocalInitialData({ 
+            ...localInitialData, 
+            id: response.$id,
+            title: title,
+            content: postData.content,
+            status: 'draft'
+          });
+          setLocalMode('edit'); // Switch to edit mode since we now have a saved draft
+        }
+      } else if (localInitialData?.id) {
+        await updatePostDB(localInitialData.id, {
+          ...postData,
+          status: 'draft'
+        });
+      }
+      
+      setLastSaved(new Date());
+      setHasChanges(false);
+      setSuccessMessage(`Draft saved at ${new Date().toLocaleTimeString()}`);
+    } catch (error) {
+      console.error('Error saving draft:', error);
+      setError("There was a problem saving your draft. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   // Set up autosave
   useEffect(() => {
     if (hasChanges && editor) {
@@ -119,7 +186,7 @@ export function PostForm({ initialData, mode = 'create' }: PostFormProps) {
         clearTimeout(autoSaveTimerRef.current);
       }
     };
-  }, [hasChanges, title, editor]);
+  }, [hasChanges, title, editor, savePostAsDraft]);
 
   // Track changes
   useEffect(() => {
@@ -188,72 +255,6 @@ export function PostForm({ initialData, mode = 'create' }: PostFormProps) {
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
-    }
-  };
-
-  const savePostAsDraft = async () => {
-    if (!editor || !title.trim()) return;
-    
-    const contentJson = editor.getJSON();
-    
-    try {
-      setIsSaving(true);
-      
-      let coverImageId = localInitialData?.imageId;
-
-      if (coverImageFile) {
-        const uploadedCoverImage = await uploadImage(coverImageFile);
-        coverImageId = uploadedCoverImage.id;
-      }
-
-      const postData = {
-        title: title,
-        content: JSON.stringify(contentJson),
-        visibility: visibility,
-        group_id: visibility === 'groups' ? selectedGroups : [],
-        post_type: postType,
-        image: coverImageId,
-        label: postLabel
-      };
-
-      if (localMode === 'create') {
-        const response = await createPostDB(
-          postData.title,
-          postData.content,
-          postData.visibility,
-          postData.group_id,
-          postData.image,
-          'draft',
-          postData.post_type,
-          postData.label
-        );
-        
-        // Update initialData with the new post id
-        if (response?.$id) {
-          setLocalInitialData({ 
-            ...localInitialData, 
-            id: response.$id,
-            title: title,
-            content: postData.content,
-            status: 'draft'
-          });
-          setLocalMode('edit'); // Switch to edit mode since we now have a saved draft
-        }
-      } else if (localInitialData?.id) {
-        await updatePostDB(localInitialData.id, {
-          ...postData,
-          status: 'draft'
-        });
-      }
-      
-      setLastSaved(new Date());
-      setHasChanges(false);
-      setSuccessMessage(`Draft saved at ${new Date().toLocaleTimeString()}`);
-    } catch (error) {
-      console.error('Error saving draft:', error);
-      setError("There was a problem saving your draft. Please try again.");
-    } finally {
-      setIsSaving(false);
     }
   };
 
