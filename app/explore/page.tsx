@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { PostCard } from '@/components/ui/PostCard';
 import { UserCard } from '@/components/ui/UserCard';
 import { getVisiblePosts, getPopularAuthors, searchUsers } from '@/lib/appwrite';
-import { Search, Users, FileText, Sparkles,  Filter, X, ChevronDown } from 'lucide-react';
+import { Search, Users, FileText, Sparkles,  Filter, X, ChevronDown, Loader2 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
@@ -36,6 +36,8 @@ interface Author {
   profilePictureId?: string;
 }
 
+const POST_LIMIT = 12; // Define page size
+
 export default function ExplorePage() {
   const [loading, setLoading] = useState(true);
   const [posts, setPosts] = useState<Post[]>([]);
@@ -52,6 +54,11 @@ export default function ExplorePage() {
   const [filterMenuOpen, setFilterMenuOpen] = useState(false);
   const [sortOption, setSortOption] = useState<'latest' | 'oldest' | 'alphabetical'>('latest');
   
+  // Pagination state
+  const [lastPostId, setLastPostId] = useState<string | undefined>(undefined);
+  const [hasMorePosts, setHasMorePosts] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  
   // Animation references
   const heroRef = useRef<HTMLDivElement>(null);
   const fluidSimulationRef = useRef<HTMLCanvasElement>(null);
@@ -64,31 +71,44 @@ export default function ExplorePage() {
 
   const router = useRouter();
 
-  // Fetch posts and authors on page load
+  // Fetch initial posts and authors on page load
   useEffect(() => {
-    async function fetchData() {
+    async function fetchInitialData() {
       try {
         setLoading(true);
         setLoadingAuthors(true);
+        setPosts([]); // Reset posts
+        setFilteredPosts([]); // Reset filtered posts
+        setLastPostId(undefined);
+        setHasMorePosts(true);
         
-        // Fetch posts and authors in parallel
+        // Fetch initial posts and authors in parallel
         const [postsData, authorsData] = await Promise.all([
-          getVisiblePosts(50),
+          getVisiblePosts(POST_LIMIT), // Fetch first page
           getPopularAuthors(8)
         ]);
         
-        setPosts(postsData.documents as unknown as Post[]);
-        setFilteredPosts(postsData.documents as unknown as Post[]);
+        const initialPosts = postsData.documents as unknown as Post[];
+        setPosts(initialPosts);
+        setFilteredPosts(initialPosts); // Initialize filtered posts
         setPopularAuthors(authorsData as Author[]);
+
+        // Set pagination state
+        if (initialPosts.length > 0) {
+            setLastPostId(initialPosts[initialPosts.length - 1].$id);
+        }
+        setHasMorePosts(initialPosts.length === POST_LIMIT);
+
       } catch (error) {
-        console.error('Error fetching data:', error);
+        console.error('Error fetching initial data:', error);
+        setHasMorePosts(false); // Stop pagination on error
       } finally {
         setLoading(false);
         setLoadingAuthors(false);
       }
     }
 
-    fetchData();
+    fetchInitialData();
     
     // Check if mobile
     const checkMobile = () => {
@@ -210,27 +230,70 @@ export default function ExplorePage() {
     };
   }, []);
 
-  // Handle search
+  // Function to load more posts
+  const loadMorePosts = useCallback(async () => {
+    console.log('[ExplorePage] loadMorePosts called. State:', { isLoadingMore, hasMorePosts, lastPostId });
+    if (isLoadingMore || !hasMorePosts || !lastPostId) {
+        console.log('[ExplorePage] loadMorePosts condition met, returning.');
+        return;
+    }
+
+    setIsLoadingMore(true);
+    console.log(`[ExplorePage] Fetching posts after ID: ${lastPostId}`);
+    try {
+      const postsData = await getVisiblePosts(POST_LIMIT, lastPostId);
+      console.log('[ExplorePage] API Response:', postsData);
+      const newPosts = postsData.documents as unknown as Post[];
+      console.log(`[ExplorePage] Received ${newPosts.length} new posts.`);
+
+      setPosts(prevPosts => [...prevPosts, ...newPosts]);
+      // Update filteredPosts as well if not currently searching/filtering?
+      // For now, assume filtering/search will re-run on the full `posts` list when applied.
+      // If filters are active, maybe re-apply them here?
+      // Simplest: just append to main posts list. Filtering logic needs to handle the updated posts list.
+      setFilteredPosts(prevPosts => [...prevPosts, ...newPosts]); // TEMP: Mirror posts for now
+
+      let newLastPostId = lastPostId;
+      if (newPosts.length > 0) {
+        newLastPostId = newPosts[newPosts.length - 1].$id;
+      }
+      const newHasMorePosts = newPosts.length === POST_LIMIT;
+
+      console.log('[ExplorePage] Updating state:', { newLastPostId, newHasMorePosts });
+      setLastPostId(newLastPostId);
+      setHasMorePosts(newHasMorePosts);
+
+    } catch (error) {
+      console.error('[ExplorePage] Error loading more posts:', error);
+      setHasMorePosts(false); // Stop pagination on error
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [isLoadingMore, hasMorePosts, lastPostId]);
+
+  // Handle search - This needs adjustment to work with pagination
+  // Option 1: Search only currently loaded posts (simple)
+  // Option 2: Trigger a new API search call (better, but requires backend changes?)
+  // Option 3: Load *all* posts before searching (bad for performance)
+  // Let's stick with Option 1 for now: filter the existing `posts` array
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSearching(true);
     
     if (!searchQuery.trim()) {
-      setFilteredPosts(posts);
+      // Reset filters if search is cleared
+      setActiveFilters([]); 
+      applyFiltersAndSort(posts); // Apply sort/filters to the full posts list
       setMatchedUsers([]);
       setIsSearching(false);
       return;
     }
     
+    setIsSearching(true);
     try {
       const query = searchQuery.toLowerCase();
+      const stripHtml = (html: string) => html.replace(/<[^>]*>?/gm, '');
       
-      // Search posts - strip HTML tags for content searching
-      const stripHtml = (html: string) => {
-        // Create a safer HTML stripping function that works server and client side
-        return html.replace(/<[^>]*>?/gm, '');
-      };
-      
+      // Filter the currently loaded posts
       const postResults = posts.filter(
         post => 
           post.title.toLowerCase().includes(query) || 
@@ -238,27 +301,60 @@ export default function ExplorePage() {
           (post.user_name && post.user_name.toLowerCase().includes(query))
       );
       
-      // Search users
+      // Search users via API (this is fine)
       const userResults = await searchUsers(searchQuery);
       
-      setFilteredPosts(postResults);
+      setFilteredPosts(postResults); // Update filtered list with search results
       setMatchedUsers(userResults);
-      setIsSearching(false);
       
-      // Set active tab based on results
       if (postResults.length === 0 && userResults.length > 0) {
         setActiveTab('users');
-      } else if (postResults.length > 0 && userResults.length === 0) {
-        setActiveTab('posts');
       } else {
-        setActiveTab('all');
+        setActiveTab('all'); // Or stay on current tab?
       }
     } catch (error) {
-      console.error('Error searching:', error);
+      console.error('Error during search:', error);
+      // Maybe show an error message
+    } finally {
       setIsSearching(false);
     }
   };
   
+  // Apply filters and sorting - should operate on the full `posts` list
+  const applyFiltersAndSort = useCallback((postsToFilter: Post[]) => {
+    let result = [...postsToFilter];
+
+    // Apply filters
+    if (activeFilters.length > 0) {
+      result = result.filter(post => 
+        activeFilters.every(filter => post.label === filter)
+      );
+    }
+
+    // Apply sorting
+    switch (sortOption) {
+      case 'latest':
+        result.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        break;
+      case 'oldest':
+        result.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+        break;
+      case 'alphabetical':
+        result.sort((a, b) => a.title.localeCompare(b.title));
+        break;
+    }
+    
+    setFilteredPosts(result);
+  }, [activeFilters, sortOption]);
+
+  // Effect to re-apply filters/sort when dependencies change
+  useEffect(() => {
+     // Don't re-apply if searching, as handleSearch sets filteredPosts directly
+     if (!isSearching && !searchQuery.trim()) {
+       applyFiltersAndSort(posts);
+     }
+  }, [posts, activeFilters, sortOption, applyFiltersAndSort, isSearching, searchQuery]);
+
   // Handle filter toggles
   const toggleFilter = (filter: string) => {
     setActiveFilters(current => 
@@ -293,33 +389,6 @@ export default function ExplorePage() {
     setFilteredPosts(sortedPosts);
   };
   
-  // Apply filters and sorting when dependencies change
-  useEffect(() => {
-    if (!posts.length) return;
-    
-    // Apply filters first
-    let result = [...posts];
-    
-    if (activeFilters.length > 0) {
-      result = result.filter(post => post.label && activeFilters.includes(post.label));
-    }
-    
-    // Then apply sorting
-    if (sortOption === 'latest') {
-      result.sort((a, b) => {
-        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-      });
-    } else if (sortOption === 'oldest') {
-      result.sort((a, b) => {
-        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-      });
-    } else if (sortOption === 'alphabetical') {
-      result.sort((a, b) => a.title.localeCompare(b.title));
-    }
-    
-    setFilteredPosts(result);
-  }, [posts, activeFilters, sortOption]);
-
   return (
     <div className="animate-fade-in">
       {/* Hero section with fluid animation background */}
@@ -583,18 +652,43 @@ export default function ExplorePage() {
                       <FileText className="h-5 w-5 mr-2 text-primary" />
                       Posts
                     </h2>
-                    {renderColumnsLayout(filteredPosts, loading, hoveredPost, setHoveredPost)}
+                    {renderColumnsLayout(filteredPosts, loading || isLoadingMore, hoveredPost, setHoveredPost)}
                   </motion.div>
                 )}
               </TabsContent>
               
               <TabsContent value="posts" className="mt-6 outline-none">
-                {filteredPosts.length > 0 ? (
-                  renderColumnsLayout(filteredPosts, loading, hoveredPost, setHoveredPost)
-                ) : (
-                  <div className="text-center py-10">
-                    <h3 className="text-lg font-medium">No posts found</h3>
-                    <p className="text-muted-foreground">Try a different search term</p>
+                {/* Conditional loading/empty states */}
+                {loading && filteredPosts.length === 0 && (
+                  <div className="flex justify-center items-center col-span-full py-12">
+                    <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}>
+                      <Loader2 className="h-8 w-8 text-primary" />
+                    </motion.div>
+                  </div>
+                )}
+                {!loading && filteredPosts.length === 0 && (
+                  <div className="col-span-full text-center py-12 bg-secondary/30 rounded-lg">
+                    <h3 className="text-xl font-semibold">No posts found</h3>
+                    <p className="text-muted-foreground mt-2">Try adjusting your search or filters.</p>
+                  </div>
+                )}
+                
+                {/* Load More Button */}
+                {!loading && hasMorePosts && (
+                  <div className="mt-8 flex justify-center col-span-full">
+                    <Button 
+                      onClick={loadMorePosts} 
+                      disabled={isLoadingMore}
+                      variant="outline"
+                      size="lg"
+                      className="hover:bg-primary/10 transition-colors duration-200 ease-in-out"
+                    >
+                      {isLoadingMore ? (
+                        <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading...</>
+                      ) : (
+                        'Load More Posts'
+                      )}
+                    </Button>
                   </div>
                 )}
               </TabsContent>
@@ -725,15 +819,21 @@ export default function ExplorePage() {
             {filteredPosts.length > 10 && (
               <div className="mt-20">
                 <h3 className="text-2xl font-semibold mb-6">More Posts</h3>
-                {renderColumnsLayout(filteredPosts.slice(10), loading, hoveredPost, setHoveredPost)}
+                {renderColumnsLayout(filteredPosts.slice(10), loading || isLoadingMore, hoveredPost, setHoveredPost)}
                 
                 <div className="mt-12 text-center">
-                  <Button 
-                    variant="outline" 
-                    size="lg" 
+                  <Button
+                    onClick={loadMorePosts}
+                    disabled={isLoadingMore}
+                    variant="outline"
+                    size="lg"
                     className="px-10 h-12 border-2 hover:bg-foreground/5 hover:border-[var(--gradient-start)] transition-colors"
                   >
-                    Load More
+                    {isLoadingMore ? (
+                      <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading...</>
+                    ) : (
+                      'Load More Posts'
+                    )}
                   </Button>
                 </div>
               </div>

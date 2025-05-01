@@ -1,11 +1,11 @@
 "use client"
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { getVisiblePosts, bookmarkPost, removeBookmark, getUserBookmarks } from "@/lib/appwrite"
 import { PostCard } from "@/components/ui/PostCard"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { PlusCircle, Search, TrendingUp, Clock, Bookmark, Filter, ChevronDown, ArrowRight, X, Heart, Sparkles, Pen, Globe } from "lucide-react"
+import { PlusCircle, Search, TrendingUp, Clock, Bookmark, Filter, ChevronDown, ArrowRight, X, Heart, Sparkles, Pen, Globe, Loader2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
@@ -26,13 +26,10 @@ interface PostDocument extends Models.Document {
   label?: 'Work' | 'Philosophy' | 'Art' | 'literature' | 'Cinema';
 }
 
-interface PostsState {
-  documents: PostDocument[];
-  total: number;
-}
+const POST_LIMIT = 10; // Define page size for home page
 
 export default function Home() {
-  const [posts, setPosts] = useState<PostsState | null>(null);
+  const [posts, setPosts] = useState<PostDocument[]>([]);
   const [bookmarkedPosts, setBookmarkedPosts] = useState<string[]>([]);
   const [savedPosts, setSavedPosts] = useState<PostDocument[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -41,6 +38,11 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
   const [filterMenuOpen, setFilterMenuOpen] = useState(false);
+  
+  // Pagination state
+  const [lastPostId, setLastPostId] = useState<string | undefined>(undefined);
+  const [hasMorePosts, setHasMorePosts] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   
   // Auth context
   const { user } = useAuth();
@@ -56,21 +58,34 @@ export default function Home() {
   const particlesRef = useRef<HTMLDivElement>(null);
   
   useEffect(() => {
-    const fetchPosts = async () => {
+    const fetchInitialPosts = async () => {
       setIsLoading(true);
       setError(null);
+      setPosts([]); // Reset posts
+      setLastPostId(undefined);
+      setHasMorePosts(true);
       try {
-        const fetchedPosts = await getVisiblePosts(20);
-        setPosts(fetchedPosts as unknown as PostsState);
+        // Fetch first page
+        const fetchedPostsData = await getVisiblePosts(POST_LIMIT);
+        const initialPosts = fetchedPostsData.documents as unknown as PostDocument[];
+        setPosts(initialPosts);
+
+        // Set pagination state
+        if (initialPosts.length > 0) {
+          setLastPostId(initialPosts[initialPosts.length - 1].$id);
+        }
+        setHasMorePosts(initialPosts.length === POST_LIMIT);
+
       } catch (err) {
-        console.error("Error fetching posts:", err);
-        setError(err instanceof Error ? err : new Error('Failed to fetch posts'));
+        console.error("Error fetching initial posts:", err);
+        setError(err instanceof Error ? err : new Error('Failed to fetch initial posts'));
+        setHasMorePosts(false); // Stop pagination on error
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchPosts();
+    fetchInitialPosts();
     
     // Check if mobile
     const checkMobile = () => {
@@ -223,7 +238,7 @@ export default function Home() {
         setBookmarkedPosts(prev => [...prev, postId]);
         
         // Add to saved posts if we know the post data
-        const postToAdd = posts?.documents.find(post => post.$id === postId);
+        const postToAdd = posts.find(post => post.$id === postId);
         if (postToAdd) {
           setSavedPosts(prev => [...prev, postToAdd]);
         }
@@ -235,6 +250,42 @@ export default function Home() {
       toast.error("Failed to update bookmark");
     }
   };
+
+  // Function to load more posts
+  const loadMorePosts = useCallback(async () => {
+    console.log('[HomePage] loadMorePosts called. State:', { isLoadingMore, hasMorePosts, lastPostId });
+    if (isLoadingMore || !hasMorePosts || !lastPostId) {
+        console.log('[HomePage] loadMorePosts condition met, returning.');
+        return;
+    }
+
+    setIsLoadingMore(true);
+    console.log(`[HomePage] Fetching posts after ID: ${lastPostId}`);
+    try {
+      const postsData = await getVisiblePosts(POST_LIMIT, lastPostId);
+      console.log('[HomePage] API Response:', postsData);
+      const newPosts = postsData.documents as unknown as PostDocument[];
+      console.log(`[HomePage] Received ${newPosts.length} new posts.`);
+
+      setPosts(prevPosts => [...prevPosts, ...newPosts]);
+
+      let newLastPostId = lastPostId;
+      if (newPosts.length > 0) {
+        newLastPostId = newPosts[newPosts.length - 1].$id;
+      }
+      const newHasMorePosts = newPosts.length === POST_LIMIT;
+
+      console.log('[HomePage] Updating state:', { newLastPostId, newHasMorePosts });
+      setLastPostId(newLastPostId);
+      setHasMorePosts(newHasMorePosts);
+
+    } catch (error) {
+      console.error('[HomePage] Error loading more posts:', error);
+      setHasMorePosts(false); // Stop pagination on error
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [isLoadingMore, hasMorePosts, lastPostId]);
 
   if (isLoading) {
     return (
@@ -260,7 +311,7 @@ export default function Home() {
   }
 
   // Filter posts based on search query and category filters
-  const filteredPosts = posts?.documents.filter(post => {
+  const filteredPosts = posts.filter(post => {
     const matchesSearch = !searchQuery || 
       post.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       post.content.toLowerCase().includes(searchQuery.toLowerCase());
@@ -288,14 +339,16 @@ export default function Home() {
       {/* Enhanced Hero Section with Fluid Simulation */}
       <div 
         ref={heroRef}
-        className="relative min-h-[90vh] flex items-center justify-center mb-24 bg-gradient-to-br from-[var(--gradient-start)] via-background to-[var(--gradient-end)] overflow-hidden"
+        className="relative min-h-screen w-full flex items-center justify-center mb-24 bg-gradient-to-br from-[var(--gradient-start)] via-background to-[var(--gradient-end)] overflow-hidden"
         style={{
           backgroundSize: '200% 200%',
           backgroundPosition: '50% 50%',
           transition: 'transform 0.3s ease, background-position 0.5s ease',
+          marginLeft: 'auto',
+          marginRight: 'auto',
+          maxWidth: '100vw',
         }}
       >
-        {/* Removed fluid simulation canvas */}
         
         {/* Particle animation container */}
         <div ref={particlesRef} className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -318,8 +371,8 @@ export default function Home() {
         </div>
         
         {/* Decorative elements */}
-        <div className="absolute top-1/4 -left-12 w-64 h-64 bg-gradient-to-r from-[var(--gradient-start)] to-transparent rounded-full filter blur-3xl opacity-20 z-0"></div>
-        <div className="absolute bottom-1/3 -right-12 w-80 h-80 bg-gradient-to-l from-[var(--gradient-end)] to-transparent rounded-full filter blur-3xl opacity-20 z-0"></div>
+        <div className="absolute top-1/4 left-0 w-64 h-64 bg-gradient-to-r from-[var(--gradient-start)] to-transparent rounded-full filter blur-3xl opacity-20 z-0"></div>
+        <div className="absolute bottom-1/3 right-0 w-80 h-80 bg-gradient-to-l from-[var(--gradient-end)] to-transparent rounded-full filter blur-3xl opacity-20 z-0"></div>
         <div className="absolute top-[60%] right-[20%] w-40 h-40 bg-gradient-to-tr from-[var(--gradient-start)] to-transparent rounded-full filter blur-2xl opacity-10 z-0"></div>
         
         {/* Abstract decorative SVG */}
@@ -730,14 +783,10 @@ export default function Home() {
                       <div className="h-8 w-2 bg-gradient-to-b from-[var(--gradient-start)] to-[var(--gradient-end)] rounded-full mr-3"></div>
                       <h2 className="text-3xl font-bold">Latest Posts</h2>
                     </div>
-                    
-                    <Button variant="ghost" className="gap-2">
-                      View All <ArrowRight className="h-4 w-4" />
-                    </Button>
                   </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                    {filteredPosts.slice(2).map((post) => (
+                    {filteredPosts.map((post) => (
                       <div
                         key={post.$id}
                         className="bg-card rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 border border-border/40 group hover:scale-[1.01] relative parallax-container"
@@ -762,14 +811,20 @@ export default function Home() {
                     ))}
                   </div>
 
-                  {filteredPosts.length > 5 && (
-                    <div className="mt-12 text-center">
+                  {!isLoading && hasMorePosts && (
+                    <div className="mt-12 flex justify-center">
                       <Button 
-                        variant="outline" 
-                        size="lg" 
-                        className="px-10 h-12 border-2 hover:bg-foreground/5 hover:border-[var(--gradient-start)] transition-colors"
+                        onClick={loadMorePosts} 
+                        disabled={isLoadingMore}
+                        variant="outline"
+                        size="lg"
+                        className="hover:bg-primary/10 transition-colors duration-200 ease-in-out shadow-sm border border-border/40"
                       >
-                        Load More
+                        {isLoadingMore ? (
+                          <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading...</>
+                        ) : (
+                          'Load More Posts'
+                        )}
                       </Button>
                     </div>
                   )}

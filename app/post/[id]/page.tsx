@@ -27,6 +27,7 @@ interface Post {
   visibility?: 'public' | 'private' | 'groups';
   group_id?: string[];
   post_type?: 'standard' | 'blog';
+  status?: 'published' | 'draft';
 }
 
 // Correct type definition for Next.js App Router page props
@@ -46,100 +47,125 @@ export default function PostPage({ params }: PageProps) {
   const { user } = useAuth();
 
   useEffect(() => {
-    async function fetchPost() {
+    async function fetchPostDataParallel() {
       try {
         setLoading(true);
         setAccessDenied(false);
         setError(null);
-        const postData = await getPost(id);
-        
-        const hasAccess = await checkPostAccess(postData);
-        if (!hasAccess) {
-          setAccessDenied(true);
-          setPost(null);
-          setError('You do not have permission to view this post');
-          return;
+        setPost(null); // Reset post state at the beginning
+        setGroupNames({}); // Reset group names
+
+        // Fetch post and current user in parallel initially
+        const [postResult, currentUserResult] = await Promise.allSettled([
+          getPost(id),
+          getCurrentUser() // Fetch user early if needed for most checks
+        ]);
+
+        if (postResult.status === 'rejected') {
+          console.error('Error fetching post:', postResult.reason);
+          if (postResult.reason instanceof Error && postResult.reason.message.includes('not found')) {
+            setError('Post not found or you don\'t have access.');
+          } else {
+            setError('Failed to load post details.');
+          }
+          return; // Stop if post fetch fails
         }
-        
-        setPost(postData as unknown as Post);
-        
-        if (postData.visibility === 'groups' && postData.group_id && postData.group_id.length > 0) {
-           await fetchGroupNames(postData.group_id);
+
+        const postData = postResult.value as unknown as Post; // Cast via unknown
+        // Handle potential failure of getCurrentUser gracefully
+        const currentUser = currentUserResult.status === 'fulfilled' ? currentUserResult.value : null;
+
+        // --- Access Check Logic ---
+
+        // Draft Check
+        if (postData.status === 'draft') {
+          if (!currentUser || currentUser.$id !== postData.user_id) {
+            setAccessDenied(true);
+            setError('You do not have permission to view this draft post.');
+            return;
+          }
+          // If draft and owner, proceed to set post
         }
-      } catch (err) {
-        console.error('Error fetching post:', err);
-         if (err instanceof Error && err.message.includes('not found')) {
-           setError('Post not found or you don\'t have access.');
-         } else {
-           setError('Failed to load post.');
-         }
+        // Public Check
+        else if (postData.visibility === 'public') {
+          // Access granted for public posts
+        }
+        // Authenticated User Checks (Private, Groups, Owner)
+        else {
+          if (!currentUser) {
+            setAccessDenied(true);
+            setError('You must be logged in to view this post.');
+            return;
+          }
+          if (postData.user_id === currentUser.$id) {
+            // Owner always has access (even if private/groups)
+          } else if (postData.visibility === 'private') {
+            setAccessDenied(true);
+            setError('This is a private post and you are not the owner.');
+            return;
+          } else if (postData.visibility === 'groups' && Array.isArray(postData.group_id) && postData.group_id.length > 0) {
+            // For groups, need memberships and group names (fetch in parallel)
+            const [membershipsResult, groupsResult] = await Promise.allSettled([
+              getUserMemberships(), // Check if user is member of required groups
+              getUserGroups() // Get names for display
+            ]);
+
+            if (membershipsResult.status === 'rejected') {
+              console.error("Error fetching user memberships:", membershipsResult.reason);
+              setAccessDenied(true);
+              setError('Could not verify group membership.');
+              return;
+            }
+
+            const userMemberships = membershipsResult.value;
+            const userGroupIds = userMemberships.map(group => group.$id);
+            const hasGroupAccess = postData.group_id.some((groupId: string) => userGroupIds.includes(groupId));
+
+            if (!hasGroupAccess) {
+              setAccessDenied(true);
+              setError('You do not have access to the required groups for this post.');
+              return;
+            }
+
+            // If access granted, process group names (handle potential failure)
+            if (groupsResult.status === 'fulfilled') {
+              const userGroups = groupsResult.value;
+              const groupMap: { [key: string]: string } = {};
+              userGroups.forEach(group => {
+                if (postData.group_id!.includes(group.$id)) { // Use non-null assertion if type guarantees group_id existence here
+                  groupMap[group.$id] = group.name;
+                }
+              });
+              setGroupNames(groupMap);
+            } else {
+              console.error('Error fetching group names:', groupsResult.reason);
+              // Non-critical error, maybe show IDs instead? For now, just log.
+            }
+          } else {
+            // Fallback if visibility isn't covered or group_id is missing/empty
+             setAccessDenied(true);
+             setError('Access denied due to post visibility settings.');
+             return;
+          }
+        }
+
+        // --- Set Post State ---
+        setPost(postData);
+
+      } catch (err) { // Catch any unexpected errors during the process
+        console.error('Unexpected error in fetchPostDataParallel:', err);
+        setError('An unexpected error occurred while loading the post.');
+        setAccessDenied(true); // Assume access denied on unexpected error
       } finally {
         setLoading(false);
       }
     }
 
-    async function checkPostAccess(postData: Record<string, unknown>): Promise<boolean> {
-      if (!postData || !postData.visibility) return false;
-
-      // Prevent draft posts from being accessed by anyone except the author
-      if (postData.status === 'draft') {
-        const currentUser = await getCurrentUser();
-        return currentUser?.$id === postData.user_id;
-      }
-
-      if (postData.visibility === 'public') {
-        return true;
-      }
-      
-      const currentUser = await getCurrentUser();
-      
-      if (!currentUser) {
-        return false;
-      }
-      
-      if (postData.user_id === currentUser.$id) {
-        return true;
-      }
-      
-      if (postData.visibility === 'private') {
-        return false;
-      }
-      
-      if (postData.visibility === 'groups' && Array.isArray(postData.group_id)) {
-         if (postData.group_id.length === 0) return false;
-         try {
-           const userMemberships = await getUserMemberships();
-           const userGroupIds = userMemberships.map(group => group.$id);
-           return postData.group_id.some((groupId: string) => userGroupIds.includes(groupId));
-         } catch (membershipError) {
-           console.error("Error fetching user memberships:", membershipError);
-           return false;
-         }
-      }
-      
-      return false;
-    }
-
-    async function fetchGroupNames(groupIds: string[]) {
-       try {
-        const userGroups = await getUserGroups();
-        const groupMap: {[key: string]: string} = {};
-        userGroups.forEach(group => {
-          if (groupIds.includes(group.$id)) {
-             groupMap[group.$id] = group.name;
-          }
-        });
-        setGroupNames(groupMap);
-      } catch (err) {
-        console.error('Error fetching group names:', err);
-      }
-    }
-
     if (id) {
-      fetchPost();
+      fetchPostDataParallel(); // Call the new parallel function
     }
 
-  }, [id]);
+  }, [id]); // Keep 'user' dependency? If auth state changes, should re-check access. Maybe add user?.$id
 
   const handleDeletePost = async () => {
     if (!user || !post || post.user_id !== user.$id) {

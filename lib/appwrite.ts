@@ -715,119 +715,56 @@ export const searchUsers = async (searchTerm: string, limit = 10) => {
     }
 };
 
-// Function to get user by ID
-export const getUserById = async (userId: string): Promise<Record<string, unknown> | null> => {
+// Updated getUserById to fetch only necessary profile fields and paginate *public* standard posts
+export const getUserById = async (userId: string, postLimit = 10, postCursor?: string): Promise<Record<string, unknown> | null> => {
     try {
-        // First try to get user from users collection
-        try {
-            const user = await databases.getDocument(
-                DATABASES.MAIN,
-                COLLECTIONS.USERS,
-                userId
-            );
-            
-            // Get user's posts
-            const postsQuery = await databases.listDocuments(
-                DATABASES.MAIN,
-                COLLECTIONS.POSTS,
-                [
-                    Query.equal('user_id', userId),
-                    Query.equal('status', 'published'),
-                    Query.orderDesc('created_at')
-                ]
-            );
-            
-            return {
-                userId: user.$id,
-                name: user.name,
-                email: user.email,
-                profilePictureId: user.profilePictureId,
-                bio: user.bio,
-                created_at: user.created_at,
-                postCount: postsQuery.documents.length || 0,
-                posts: postsQuery.documents
-            };
-        } catch (error) {
-            console.error("Error fetching user from users collection:", error);
-            
-            // If not found in users collection, try to get from posts collection
-            try {
-                // Look for any posts by this user to get basic user info
-                const postsQuery = await databases.listDocuments(
-                    DATABASES.MAIN,
-                    COLLECTIONS.POSTS,
-                    [
-                        Query.equal('user_id', userId),
-                        Query.equal('status', 'published'),
-                        Query.orderDesc('created_at'),
-                        Query.limit(1)
-                    ]
-                );
-                
-                if (postsQuery.documents.length > 0) {
-                    const userPost = postsQuery.documents[0];
-                    // Get all posts by this user
-                    const allPostsQuery = await databases.listDocuments(
-                        DATABASES.MAIN,
-                        COLLECTIONS.POSTS,
-                        [
-                            Query.equal('user_id', userId),
-                            Query.equal('status', 'published'),
-                            Query.orderDesc('created_at')
-                        ]
-                    );
-                    
-                    return {
-                        userId: userPost.user_id,
-                        name: userPost.user_name,
-                        profilePictureId: null, // We don't have this from posts
-                        bio: null,
-                        created_at: userPost.created_at,
-                        postCount: allPostsQuery.documents.length || 0,
-                        posts: allPostsQuery.documents
-                    };
-                }
-                
-                // If still no data, try to get from Appwrite accounts (only works for current user)
-                try {
-                    const user = await account.get();
-                    
-                    if (user.$id === userId) {
-                        // User found in account but might not have posts
-                        const postsQuery = await databases.listDocuments(
-                            DATABASES.MAIN,
-                            COLLECTIONS.POSTS,
-                            [
-                                Query.equal('user_id', userId),
-                                Query.equal('status', 'published'),
-                                Query.orderDesc('created_at')
-                            ]
-                        );
-                        
-                        return {
-                            userId: user.$id,
-                            name: user.name,
-                            email: user.email,
-                            profilePictureId: user.prefs?.profilePictureId || null,
-                            bio: null,
-                            created_at: null,
-                            postCount: postsQuery.documents.length || 0,
-                            posts: postsQuery.documents
-                        };
-                    }
-                } catch (accountError) {
-                    console.error("Error fetching user from account:", accountError);
-                }
-            } catch (postsError) {
-                console.error("Error fetching user from posts:", postsError);
-            }
-            
-            // Not found in any collection
-            return null;
+        // Fetch user document details
+        const userDoc = await databases.getDocument(
+            DATABASES.MAIN,
+            COLLECTIONS.USERS,
+            userId
+        );
+
+        // Fetch user's *public*, *published*, *standard* posts for the profile preview
+        const postQueries = [
+            Query.equal('user_id', userId),
+            Query.equal('visibility', 'public'),
+            Query.equal('status', 'published'),
+            Query.equal('post_type', 'standard'),
+            Query.orderDesc('created_at'),
+            Query.limit(postLimit)
+        ];
+
+        if (postCursor) {
+            postQueries.push(Query.cursorAfter(postCursor));
         }
+
+        const posts = await databases.listDocuments(
+            DATABASES.MAIN,
+            COLLECTIONS.POSTS,
+            postQueries
+        );
+
+        // Fetch total public post count (consider performance impact)
+        // This might require a separate query without limit/cursor if needed accurately
+        // For simplicity, we might omit the separate count query for now.
+
+        return {
+            ...(userDoc as Record<string, unknown>),
+            // Return only the first page of public standard posts
+            posts: posts.documents, 
+            // Indicate if more public standard posts might exist
+            hasMorePublicStandardPosts: posts.documents.length === postLimit 
+            // postCount: posts.total // This total would be for the *query*, not all user posts
+        };
     } catch (error) {
-        console.error("Error fetching user:", error);
-        return null; // Return null instead of throwing
+        if (error instanceof Error) {
+            console.log(`User document not found for ID: ${userId}`);
+            return null;
+        } else {
+            console.error("Error fetching user by ID:", error);
+            throw error;
+        }
     }
 };
 
@@ -1168,129 +1105,100 @@ export const getUserMemberships = async (userId?: string) => {
             [Query.equal('user_id', userId)]
         );
         
-        // Get the actual groups based on the group IDs
-        const groupIds = memberships.documents.map(doc => doc.group_id);
-        const groups: Group[] = [];
+        // Fetch group details for each membership
+        const groupPromises = memberships.documents.map(membership => {
+            // Return the membership document directly, which contains group_id
+            return membership as unknown as GroupMember; // Cast to GroupMember
+        });
         
-        for (const groupId of groupIds) {
-            try {
-                const group = await getGroup(groupId);
-                groups.push(group);
-            } catch (error) {
-                console.error(`Error fetching group ${groupId}:`, error);
-                // Continue with other groups if one fails
-            }
-        }
-        
-        return groups;
+        return groupPromises;
     } catch (error) {
         console.error("Error fetching user memberships:", error);
         throw error;
     }
 };
 
-/**
- * Get all posts visible to the current user
- * This includes:
- * 1. Public posts
- * 2. User's own private posts
- * 3. Posts shared with groups the user is a member of
- * @param limit Maximum number of posts to return
- * @returns Array of posts visible to the current user
- */
-export const getVisiblePosts = async (limit = 10) => {
-    try {
-        const currentUser = await getCurrentUser();
-        if (!currentUser) {
-            // If not authenticated, only return public posts
-            return await databases.listDocuments(
-                DATABASES.MAIN,
-                COLLECTIONS.POSTS,
-                [
-                    Query.equal('status', 'published'),
-                    Query.equal('visibility', 'public'),
-                    Query.equal('post_type', 'standard'), // Only show standard posts, not blog posts
-                    Query.orderDesc('created_at'),
-                    Query.limit(limit)
-                ]
-            );
-        }
-        
-        // Get all groups the user is a member of
-        const userGroups = await getUserMemberships();
-        const groupIds = userGroups.map(group => group.$id);
-        
-        // Get all posts visible to the user
-        // 1. Public posts
-        // 2. User's own private posts
-        // 3. Posts shared with groups the user is a member of
-        const allPosts = await databases.listDocuments(
-            DATABASES.MAIN,
-            COLLECTIONS.POSTS,
-            [Query.equal('status', 'published'), Query.orderDesc('created_at'), Query.limit(100)] // Get more than we need for filtering
-        );
-        
-        // Filter posts based on visibility permissions
-        const visiblePosts = allPosts.documents.filter(post => {
-            // Skip blog posts - they should only appear in user profiles
-            if (post.post_type === 'blog') return false;
-            
-            // Public posts are visible to everyone
-            if (post.visibility === 'public') return true;
-            
-            // Private posts are only visible to the creator
-            if (post.visibility === 'private' && post.user_id === currentUser.$id) return true;
-            
-            // User's own posts should always be visible to them regardless of visibility
-            if (post.user_id === currentUser.$id) return true;
-            
-            // Group posts are visible to members of the included groups
-            if (post.visibility === 'groups' && Array.isArray(post.group_id)) {
-                // Check if any of the user's groups are in the post's group_id
-                return post.group_id.some((gid: string) => groupIds.includes(gid));
-            }
-            
-            return false;
-        });
-        
-        // Return the top X posts based on limit
-        return {
-            ...allPosts,
-            documents: visiblePosts.slice(0, limit)
-        };
-    } catch (error) {
-        console.error("Error fetching visible posts:", error);
-        throw error;
+// Get posts visible to the current user (public or group-based if member)
+export const getVisiblePosts = async (limit = 10, cursor?: string) => {
+    const user = await getCurrentUser();
+    const baseQueries = [
+        Query.equal('status', 'published'), // Ensure only published posts are fetched
+        Query.orderDesc('created_at'), // Use created_at instead of $createdAt for user-defined field
+        Query.limit(limit)
+    ];
+
+    if (cursor) {
+        baseQueries.push(Query.cursorAfter(cursor));
     }
+
+    const visibilityQueries: Array<ReturnType<typeof Query.equal | typeof Query.and | typeof Query.or>> = [];
+
+    if (user) {
+        // Logged-in users see: public posts, their own posts, and posts in their groups
+        visibilityQueries.push(Query.equal('visibility', 'public'));
+        visibilityQueries.push(Query.equal('user_id', user.$id)); // Own posts (any visibility? check requirements)
+        
+        try {
+            const memberships = await getUserMemberships(user.$id);
+            const userGroupIds = memberships.map(m => m.group_id);
+
+            if (userGroupIds.length > 0) {
+                // Add query for posts visible to user's groups
+                // Appwrite's Query.contains works for checking if a value exists in an array attribute.
+                 visibilityQueries.push(
+                     Query.and([
+                         Query.equal('visibility', 'groups'),
+                         Query.contains('group_id', userGroupIds) 
+                     ])
+                 );
+            }
+        } catch (error) {
+            console.error("Error fetching user memberships for visible posts:", error);
+            // Proceed without group posts if membership check fails
+        }
+
+    } else {
+        // Anonymous users only see public posts
+        visibilityQueries.push(Query.equal('visibility', 'public'));
+    }
+
+    // Combine base queries with OR conditions for visibility
+    const finalQueries = [
+      ...baseQueries,
+      Query.or(visibilityQueries)
+    ];
+
+    return await databases.listDocuments(
+        DATABASES.MAIN,
+        COLLECTIONS.POSTS,
+        finalQueries
+    );
 };
 
-/**
- * Get private posts for the current user
- * @param limit Maximum number of posts to return
- * @returns Array of private posts for the current user
- */
-export const getPrivatePosts = async (limit = 10) => {
-    try {
-        const currentUser = await getCurrentUser();
-        if (!currentUser) {
-            throw new Error('User not authenticated');
-        }
-        
-        return await databases.listDocuments(
-            DATABASES.MAIN,
-            COLLECTIONS.POSTS,
-            [
-                Query.equal('user_id', currentUser.$id),
-                Query.equal('visibility', 'private'),
-                Query.equal('status', 'published'),
-                Query.orderDesc('created_at'),
-                Query.limit(limit)
-            ]
-        );
-    } catch (error) {
-        console.error("Error fetching private posts:", error);
-        throw error;
+// Updated getPrivatePosts to support pagination
+export const getPrivatePosts = async (limit = 10, cursor?: string) => {
+    const user = await getCurrentUser();
+    if (!user) {
+        throw new Error('User not authenticated');
     }
+    
+    const queries = [
+        Query.equal('user_id', user.$id),
+        Query.equal('visibility', 'private'),
+        // Query.equal('status', 'published'), // Should private posts show drafts? Decide based on requirements
+        Query.orderDesc('created_at'),
+        Query.limit(limit)
+    ];
+
+    if (cursor) {
+        queries.push(Query.cursorAfter(cursor));
+    }
+
+    return await databases.listDocuments(
+        DATABASES.MAIN,
+        COLLECTIONS.POSTS,
+        queries
+    );
 };
 
 /**
@@ -1321,26 +1229,25 @@ export const getAllUsers = async (limit = 100) => {
     }
 };
 
-// Add new function to get blog posts for a specific user
-export const getUserBlogPosts = async (userId: string, limit = 10) => {
-    try {
-        const queries = [
-            Query.equal('user_id', userId),
-            Query.equal('post_type', 'blog'), // Filter by blog type
-            Query.equal('status', 'published'),
-            Query.orderDesc('created_at'),    // Order by latest
-            Query.limit(limit)
-        ];
+// Updated getUserBlogPosts to support pagination
+export const getUserBlogPosts = async (userId: string, limit = 10, cursor?: string) => {
+     const queries = [
+         Query.equal('user_id', userId),
+         Query.equal('post_type', 'blog'),
+         Query.equal('status', 'published'), // Only show published blog posts on profile?
+         Query.orderDesc('created_at'),
+         Query.limit(limit)
+     ];
 
-        return await databases.listDocuments(
-            DATABASES.MAIN,
-            COLLECTIONS.POSTS,
-            queries
-        );
-    } catch (error) {
-        console.error("Error fetching user blog posts:", error);
-        throw error;
-    }
+     if (cursor) {
+         queries.push(Query.cursorAfter(cursor));
+     }
+
+    return await databases.listDocuments(
+        DATABASES.MAIN,
+        COLLECTIONS.POSTS,
+        queries
+    );
 };
 
 /**

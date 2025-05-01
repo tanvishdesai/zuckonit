@@ -6,7 +6,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/componen
 import { Button } from '@/components/ui/button';
 import { formatDistance } from 'date-fns';
 import { getImageUrl} from '@/lib/appwrite';
-import { Lock, Globe, Users, BriefcaseBusiness, BookOpenText, Palette, BookOpen, Film, Bookmark, ArrowUpRight } from 'lucide-react';
+import { Lock, Globe, Users, BriefcaseBusiness, BookOpenText, Palette, BookOpen, Film, Bookmark, ArrowUpRight, Share2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { TiptapContentRenderer } from './TiptapContentRenderer';
 import { useAuth } from '@/context/AuthContext';
@@ -214,8 +214,8 @@ export function PostCard({
           <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-transparent via-primary/10 to-primary/20 animate-border-flow"></div>
         </div>
         
-        {/* Bookmark button */}
-        <div className="absolute top-3 right-3 z-20">
+        {/* Action buttons: Bookmark & Share */}
+        <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5">
           <Button
             size="icon"
             variant="ghost"
@@ -232,6 +232,20 @@ export function PostCard({
                 isBookmarked && "fill-primary"
               )} 
             />
+            <span className="sr-only">Bookmark</span>
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-8 w-8 rounded-full bg-background/50 backdrop-blur-md hover:bg-background/70 transition-colors"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              window.open(`/share/${id}`, '_blank', 'noopener,noreferrer');
+            }}
+          >
+            <Share2 className="h-4 w-4 transition-transform hover:scale-110" />
+            <span className="sr-only">Share post</span>
           </Button>
         </div>
         
