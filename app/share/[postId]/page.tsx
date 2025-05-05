@@ -36,6 +36,26 @@ export default function SharePostPage() {
   useEffect(() => {
     // Apply theme from localStorage
     applyTheme();
+
+    // Force immediate dark mode class application based on localStorage
+    const savedDarkMode = localStorage.getItem('darkMode');
+    if (savedDarkMode === 'true') {
+      document.documentElement.classList.add('dark');
+      document.documentElement.classList.remove('light');
+    } else if (savedDarkMode === 'false') {
+      document.documentElement.classList.remove('dark');
+      document.documentElement.classList.add('light');
+    } else {
+      // Check for system preference if no setting
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (prefersDark) {
+        document.documentElement.classList.add('dark');
+        document.documentElement.classList.remove('light');
+      } else {
+        document.documentElement.classList.remove('dark');
+        document.documentElement.classList.add('light');
+      }
+    }
   }, [applyTheme]);
 
   useEffect(() => {
@@ -84,36 +104,49 @@ export default function SharePostPage() {
       const contentElement = shareContainerRef.current.querySelector('.prose');
       const contentText = contentElement?.textContent || '';
       
-      // Calculate roughly how much space we need based on content length
-      // This is an approximation - longer content needs more vertical space
+      // Calculate image dimensions based on content length
       const contentLength = contentText.length;
-      let aspectRatio = 1.5; // Default aspect ratio (3:2)
       
-      if (contentLength > 5000) {
-        aspectRatio = 2.5; // Very long content - make taller image (5:2)
+      // Base width is fixed for consistency
+      const totalWidth = 1200;
+      
+      // Dynamically determine height based on content length
+      let totalHeight = 0;
+      
+      if (contentLength > 10000) {
+        totalHeight = 3000; // Very long content
+      } else if (contentLength > 5000) {
+        totalHeight = 2400; // Long content
       } else if (contentLength > 2000) {
-        aspectRatio = 2; // Medium-long content (2:1)
+        totalHeight = 1800; // Medium-long content
+      } else if (contentLength > 1000) {
+        totalHeight = 1500; // Medium content
+      } else {
+        totalHeight = 1200; // Short content - closer to square
       }
+      
+      // Adjust image height proportionally to content
+      // For longer posts, the image takes up less relative space
+      const imageHeightRatio = 
+        contentLength > 5000 ? 0.2 :  // Very long - small image
+        contentLength > 2000 ? 0.25 : // Medium-long
+        contentLength > 1000 ? 0.3 :  // Medium
+        0.4;                          // Short - larger image
+      
+      const imageHeight = Math.round(totalHeight * imageHeightRatio);
       
       // Create a temporary div for export that will be sized exactly as needed
       const exportContainer = document.createElement('div');
       exportContainer.id = 'temp-export-container';
       exportContainer.style.position = 'absolute';
       exportContainer.style.left = '-9999px';
-      exportContainer.style.backgroundColor = '#ffffff';
+      // Set background color based on theme
+      const isDarkMode = document.documentElement.classList.contains('dark');
+      exportContainer.style.backgroundColor = isDarkMode ? '#121212' : '#ffffff';
       exportContainer.style.width = '1200px'; // Fixed width for consistent results
       document.body.appendChild(exportContainer);
       
-      // Set dimensions based on content
-      const totalWidth = 1200;
-      const totalHeight = Math.round(totalWidth * aspectRatio);
-      
-      // Set image height - for longer content, make image relatively smaller
-      const imageHeightRatio = contentLength > 3000 ? 0.25 : contentLength > 1000 ? 0.3 : 0.4;
-      const imageHeight = Math.round(totalHeight * imageHeightRatio);
-      
       // Get theme mode for styling
-      const isDarkMode = document.documentElement.classList.contains('dark');
       const themeColors = isDarkMode ? {
         bg: '#121212',
         cardBg: '#1e1e1e',
@@ -314,7 +347,7 @@ export default function SharePostPage() {
         
         // Find all images and ensure they have proper sizing
         const images = tempDiv.querySelectorAll('img');
-        images.forEach(img => {
+        images.forEach((img: HTMLImageElement) => {
           img.style.maxWidth = '100%';
           img.style.height = 'auto';
           img.style.objectFit = 'contain';
@@ -420,28 +453,28 @@ export default function SharePostPage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center min-h-screen bg-white dark:bg-black">
+      <div className="flex justify-center items-center min-h-screen bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   if (error) {
-    return <div className="flex justify-center items-center min-h-screen bg-white dark:bg-black text-red-500 p-4 text-center">{error}</div>;
+    return <div className="flex justify-center items-center min-h-screen bg-background text-red-500 p-4 text-center">{error}</div>;
   }
 
   if (!post) {
     // This case might be covered by the error state if fetch fails
-    return <div className="flex justify-center items-center min-h-screen bg-white dark:bg-black">Post not found.</div>;
+    return <div className="flex justify-center items-center min-h-screen bg-background">Post not found.</div>;
   }
 
   // Basic layout for sharing
   return (
-    <div className="flex flex-col justify-center items-center min-h-screen bg-gradient-to-br from-gray-100 to-gray-200 dark:from-black dark:to-black p-4 sm:p-8">
+    <div className="flex flex-col justify-center items-center min-h-screen bg-gradient-to-br from-muted to-muted/80 p-4 sm:p-8">
       <div
         id="share-container"
         ref={shareContainerRef}
-        className="bg-white dark:bg-black rounded-lg shadow-xl overflow-hidden max-w-2xl w-full border border-gray-200 dark:border-gray-700 mb-6"
+        className="bg-card dark:bg-card rounded-lg shadow-xl overflow-hidden max-w-2xl w-full border border-border mb-6"
       >
         {post.image && (
           <div className="relative w-full" style={{ paddingTop: '56.25%' }}> {/* 16:9 aspect ratio */}
@@ -456,9 +489,9 @@ export default function SharePostPage() {
             />
           </div>
         )}
-        <div className="p-6 sm:p-8 text-gray-900 dark:text-white">
-          <h1 className="text-2xl sm:text-3xl font-bold mb-3 text-gray-900 dark:text-white">{post.title}</h1>
-          <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-300 mb-4">
+        <div className="p-6 sm:p-8 text-card-foreground">
+          <h1 className="text-2xl sm:text-3xl font-bold mb-3 text-card-foreground">{post.title}</h1>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
             {post.user_name && ( // Use user_name
               <>
                 <span>By {post.user_name}</span>
@@ -467,7 +500,7 @@ export default function SharePostPage() {
             )}
             <span>{format(new Date(post.$createdAt), 'PPP')}</span>
           </div>
-          <hr className="my-4 border-gray-200 dark:border-gray-700" />
+          <hr className="my-4 border-border" />
           <TiptapContentRenderer
             content={post.content}
             className="prose prose-sm sm:prose-base dark:prose-invert max-w-none prose-headings:my-2 prose-p:my-1.5"
