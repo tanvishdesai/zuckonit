@@ -51,6 +51,23 @@ module.exports = {
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
       },
+      keyframes: {
+        pulse: {
+          '0%, 100%': { opacity: 0.6, transform: 'translate(0%, 0%) scale(1)' },
+          '50%': { opacity: 1, transform: 'translate(15%, 15%) scale(1.1)' },
+        },
+        shimmer: {
+          '0%': { backgroundPosition: '0 0' },
+          '100%': { backgroundPosition: '-200% 0' },
+        },
+      },
+      animation: {
+        pulse: 'pulse 15s ease infinite',
+        shimmer: 'shimmer 5s linear infinite',
+      },
+      backgroundImage: {
+        'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
+      },
     },
   },
   plugins: [require("@tailwindcss/typography")],
