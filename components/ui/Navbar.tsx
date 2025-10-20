@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import { PlusCircle, LogOut, User, Home, Menu, X, Settings, Compass, Info, Users, FileText, Bell } from 'lucide-react';
+import { PlusCircle, LogOut, User, Home, Menu, X, Settings, Compass, Info, Users, FileText } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { getProfilePictureUrl } from '@/lib/appwrite';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -164,18 +164,7 @@ export function Navbar() {
                   <PlusCircle className="h-4 w-4" />
                   <span>New Post</span>
                 </Link>
-              </Button>
-              
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="relative h-8 w-8 rounded-full hover:bg-primary/10 transition-colors"
-                aria-label="Notifications"
-              >
-                <Bell className="h-4 w-4" />
-                <span className="absolute top-0 right-0 h-2 w-2 bg-primary rounded-full"></span>
-              </Button>
-              
+              </Button>         
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="relative h-9 w-9 rounded-full p-0 overflow-hidden group">

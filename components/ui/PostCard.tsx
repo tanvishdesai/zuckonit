@@ -5,12 +5,12 @@ import Image from 'next/image';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { formatDistance } from 'date-fns';
-import { getImageUrl} from '@/lib/appwrite';
+import { getImageUrl } from '@/lib/appwrite';
 import { Lock, Globe, Users, BriefcaseBusiness, BookOpenText, Palette, BookOpen, Film, Bookmark, ArrowUpRight, Share2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { TiptapContentRenderer } from './TiptapContentRenderer';
 import { useAuth } from '@/context/AuthContext';
-import {  useState, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -54,18 +54,18 @@ export function PostCard({
   const { user } = useAuth();
   const [isBookmarkLoading, setIsBookmarkLoading] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
-  
+
   const formattedDate = formatDistance(new Date(createdAt), new Date(), { addSuffix: true });
-  
+
   const handleBookmarkToggle = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     if (!user) {
       toast.error("Please sign in to bookmark posts");
       return;
     }
-    
+
     if (onBookmark) {
       setIsBookmarkLoading(true);
       try {
@@ -78,7 +78,7 @@ export function PostCard({
       }
     }
   };
-  
+
   const handleDelete = () => {
     if (onDelete) {
       onDelete(id);
@@ -88,12 +88,12 @@ export function PostCard({
   // Subtle mouse follow effect
   const handleMouseMove = (e: React.MouseEvent) => {
     if (!cardRef.current) return;
-    
+
     const card = cardRef.current;
     const rect = card.getBoundingClientRect();
     const x = (e.clientX - rect.left) / rect.width - 0.5;
     const y = (e.clientY - rect.top) / rect.height - 0.5;
-    
+
     // Apply subtle transform
     card.style.transform = `
       perspective(800px)
@@ -101,7 +101,7 @@ export function PostCard({
       rotateX(${-y * 3}deg)
       translateZ(5px)
     `;
-    
+
     // Move highlight overlay
     if (card.querySelector('.highlight-overlay')) {
       const highlight = card.querySelector('.highlight-overlay') as HTMLElement;
@@ -114,13 +114,13 @@ export function PostCard({
       `;
     }
   };
-  
+
   const handleMouseLeave = () => {
     if (!cardRef.current) return;
-    
+
     const card = cardRef.current;
     card.style.transform = 'perspective(800px) rotateY(0deg) rotateX(0deg) translateZ(0)';
-    
+
     // Reset highlight
     if (card.querySelector('.highlight-overlay')) {
       const highlight = card.querySelector('.highlight-overlay') as HTMLElement;
@@ -129,7 +129,7 @@ export function PostCard({
   };
 
   const renderVisibilityBadge = () => {
-    switch(visibility) {
+    switch (visibility) {
       case 'private':
         return (
           <Badge variant="outline" className="flex items-center gap-1 bg-rose-500/10 text-rose-500 border-rose-500/20">
@@ -153,9 +153,9 @@ export function PostCard({
         );
     }
   };
-  
+
   const renderLabelBadge = () => {
-    switch(label) {
+    switch (label) {
       case 'Philosophy':
         return (
           <Badge variant="outline" className="flex items-center gap-1 bg-indigo-500/10 text-indigo-500 border-indigo-500/20">
@@ -194,26 +194,32 @@ export function PostCard({
     }
   };
 
+  // Prevent nested <a> tags: Only Card is clickable, not nested links inside Card
+  // Replace inner <Link> for title and button with <span> or div, but keep styling and accessibility.
+
   return (
-    <Link href={`/post/${id}`}>
+    <Link href={`/post/${id}`} className="block group">
       <Card
         ref={cardRef}
         className={cn(
-          "group relative overflow-hidden transition-all duration-300",
+          "relative overflow-hidden transition-all duration-300",
           featured ? "h-full" : "h-[420px]",
           className
         )}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
+        tabIndex={0}
+        role="link"
+        aria-label={title}
       >
         {/* Interactive highlight overlay */}
         <div className="highlight-overlay absolute inset-0 pointer-events-none z-10 opacity-0 transition-opacity duration-300 ease-in-out group-hover:opacity-100"></div>
-        
+
         {/* Border gradient animation */}
         <div className="absolute inset-0 -z-10 rounded-xl p-[1px] transition-all group-hover:opacity-100 opacity-0">
           <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-transparent via-primary/10 to-primary/20 animate-border-flow"></div>
         </div>
-        
+
         {/* Action buttons: Bookmark & Share */}
         <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5">
           <Button
@@ -226,11 +232,11 @@ export function PostCard({
             onClick={handleBookmarkToggle}
             disabled={isBookmarkLoading}
           >
-            <Bookmark 
+            <Bookmark
               className={cn(
                 "h-4 w-4 transition-transform hover:scale-110",
                 isBookmarked && "fill-primary"
-              )} 
+              )}
             />
             <span className="sr-only">Bookmark</span>
           </Button>
@@ -248,11 +254,11 @@ export function PostCard({
             <span className="sr-only">Share post</span>
           </Button>
         </div>
-        
+
         {imageId && (
           <div className={`relative ${featured ? 'h-64 md:h-auto' : 'h-52'} w-full group overflow-hidden`}>
             <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10"></div>
-            
+
             <Image
               src={getImageUrl(imageId).toString()}
               alt={title}
@@ -261,7 +267,7 @@ export function PostCard({
               priority={featured}
               sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
             />
-            
+
             {featured && (
               <div className="absolute bottom-0 left-0 right-0 p-4 text-white z-10 bg-gradient-to-t from-black/80 via-black/50 to-transparent">
                 <h3 className="text-xl font-bold">{userName && `By ${userName}`}</h3>
@@ -270,25 +276,26 @@ export function PostCard({
             )}
           </div>
         )}
-        
+
         <div className="flex flex-col flex-grow p-5 backdrop-blur-sm">
           <CardHeader className="p-0 mb-3">
             <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground mb-2">
               {renderVisibilityBadge()}
               {postType === 'standard' && renderLabelBadge()}
             </div>
-            
+
             <CardTitle className={cn(
               featured ? "text-2xl md:text-3xl" : "text-xl",
               "line-clamp-2 leading-tight mb-2 font-bold",
               "bg-clip-text hover:text-transparent hover:bg-gradient-to-r hover:from-primary hover:to-primary/70",
               "transition-all duration-300"
             )}>
-              <Link href={`/post/${id}`} className="transition-colors block">
+              {/* Replacing <Link> with <span> to avoid nested links */}
+              <span className="transition-colors block cursor-pointer">
                 {title}
-              </Link>
+              </span>
             </CardTitle>
-            
+
             <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
               {userName && (
                 <div className="flex items-center gap-1.5">
@@ -302,10 +309,10 @@ export function PostCard({
               <span>{formattedDate}</span>
             </div>
           </CardHeader>
-          
+
           <CardContent className="flex-grow p-0 mb-4">
-            <TiptapContentRenderer 
-              content={content} 
+            <TiptapContentRenderer
+              content={content}
               className={cn(
                 "text-sm sm:text-base prose-headings:my-2 prose-p:my-1.5",
                 featured ? "line-clamp-[8]" : "line-clamp-3",
@@ -314,35 +321,41 @@ export function PostCard({
               )}
             />
           </CardContent>
-          
+
           <CardFooter className="p-0 mt-auto flex justify-between items-center">
-            <Button 
+            {/* 
+              Prevent nested <a>: Use a <span> styled as a link for 'Read More'.
+              Only outer <Link> is used for navigation.
+            */}
+            <Button
               variant={featured ? "default" : "ghost"}
               size={featured ? "default" : "sm"}
-              asChild
               className={cn(
                 "group/readmore",
-                featured 
-                  ? "transition-all duration-300 hover:translate-y-[-2px] hover:shadow-md hover:shadow-primary/20" 
+                featured
+                  ? "transition-all duration-300 hover:translate-y-[-2px] hover:shadow-md hover:shadow-primary/20"
                   : "hover:bg-transparent p-0 h-auto text-primary"
               )}
+              tabIndex={-1} // since <Card> (within <Link>) is the only link
+              type="button"
+              aria-label="Read More"
             >
-              <Link href={`/post/${id}`} className="flex items-center gap-1.5">
+              <span className="flex items-center gap-1.5">
                 <span>Read More</span>
                 <ArrowUpRight className={cn(
-                  "h-3.5 w-3.5", 
-                  "transition-transform duration-300", 
+                  "h-3.5 w-3.5",
+                  "transition-transform duration-300",
                   "group-hover/readmore:translate-x-0.5",
                   "group-hover/readmore:-translate-y-0.5"
                 )} />
-                
+
                 {/* Animated line for non-featured cards */}
                 {!featured && (
                   <span className="block h-px w-0 bg-primary transition-all duration-300 group-hover/readmore:w-full absolute bottom-0 left-0"></span>
                 )}
-              </Link>
+              </span>
             </Button>
-            
+
             {showControls && (
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" asChild className="border-primary/20 text-primary hover:bg-primary/10 hover:text-primary">
@@ -358,4 +371,4 @@ export function PostCard({
       </Card>
     </Link>
   );
-} 
+}
