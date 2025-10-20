@@ -12,6 +12,14 @@ const APPWRITE_GROUP_MEMBERS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_GR
 const APPWRITE_POST_IMAGES_BUCKET_ID = process.env.NEXT_PUBLIC_APPWRITE_BUCKET_ID || 'post_images';
 const APPWRITE_PROFILE_PICTURES_BUCKET_ID = process.env.NEXT_PUBLIC_APPWRITE_PROFILE_PICTURES_BUCKET_ID || 'profile_pictures';
 
+// Validate environment variables in production
+if (typeof window === 'undefined' && process.env.NODE_ENV === 'production') {
+  if (!process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID || process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID === 'your-project-id') {
+    console.error('❌ APPWRITE_PROJECT_ID is not set or using default value in production');
+    throw new Error('Appwrite configuration error: Missing NEXT_PUBLIC_APPWRITE_PROJECT_ID');
+  }
+}
+
 // Initialize Appwrite Client
 const client = new Client()
     .setEndpoint(APPWRITE_ENDPOINT)
