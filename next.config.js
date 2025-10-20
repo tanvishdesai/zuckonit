@@ -4,19 +4,12 @@ const nextConfig = {
     domains: ['cloud.appwrite.io'],
     formats: ['image/webp', 'image/avif']
   },
-  // Optimize for production
-  swcMinify: true,
+  // Production optimizations
   compiler: {
     removeConsole: process.env.NODE_ENV === 'production'
   },
-  // Handle build errors gracefully
-  onDemandEntries: {
-    maxInactiveAge: 25 * 1000,
-    pagesBufferLength: 2,
-  },
-  experimental: {
-    optimizeCss: true
-  }
+  // Optimize for production
+  poweredByHeader: false
 }
 
 module.exports = nextConfig
