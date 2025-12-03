@@ -8,7 +8,7 @@ import { formatDistance } from 'date-fns';
 import { getImageUrl } from '@/lib/appwrite';
 import { Lock, Globe, Users, BriefcaseBusiness, BookOpenText, Palette, BookOpen, Film, Bookmark, ArrowUpRight, Share2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { TiptapContentRenderer } from './TiptapContentRenderer';
+import { ContentPreview } from './ContentPreview';
 import { useAuth } from '@/context/AuthContext';
 import { useState, useRef } from 'react';
 import { toast } from 'sonner';
@@ -311,13 +311,11 @@ export function PostCard({
           </CardHeader>
 
           <CardContent className="flex-grow p-0 mb-4">
-            <TiptapContentRenderer
+            <ContentPreview
               content={content}
               className={cn(
-                "text-sm sm:text-base prose-headings:my-2 prose-p:my-1.5",
-                featured ? "line-clamp-[8]" : "line-clamp-3",
-                "prose-strong:text-primary/90 prose-em:text-foreground/70 prose-headings:font-bold",
-                "prose-a:text-primary prose-a:no-underline hover:prose-a:underline"
+                "text-sm sm:text-base",
+                featured ? "line-clamp-[8]" : "line-clamp-3"
               )}
             />
           </CardContent>
